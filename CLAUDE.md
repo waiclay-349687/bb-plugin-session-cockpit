@@ -2,17 +2,17 @@
 TypeScript 5.9 + React 19 + zod 4 + @get-bb/plugin-sdk 0.6.132（bb 0.49）+ Node 22 内置测试器
 
 <directory>
-lib/: 纯逻辑层（用量归一、lsof 解析、上下文文件的层级与分组、格式化、配色），无 IO，见 lib/CLAUDE.md
+lib/: 纯逻辑层（用量归一、基于 BB 事件与文件大小的上下文估算、lsof 解析、上下文文件的层级与分组、格式化、配色），无 IO，见 lib/CLAUDE.md
 components/cockpit/: Cockpit 分区（桌面挂线程上下文卡片，手机与窄窗格挂横幅详情）、设置页、对 bb 宿主界面的样式修饰与自检，见 components/cockpit/CLAUDE.md
 components/ui/: bb 脚手架 vendored 的 shadcn 基础组件
 skills/session-cockpit/: 注入给 agent 的 CLI 用法说明
-test/: 单测与真实线程样本（fixtures 只含用量类事件）
+test/: 单测、合成估算用例与脱敏线程样本（fixtures 只含用量类事件）
 docs/: 交接说明 HANDOFF.md（现状、未验证项、取舍、踩过的坑）
 </directory>
 
 <config>
 package.json: 插件清单（bb.server / bb.app / bb.host / branding）与 npm 脚本
-rpc.ts: 前端 ↔ 后端 RPC 契约（前端需要运行时契约对象，故独立于 server.ts）
+rpc.ts: 前端 ↔ 后端 RPC 契约，breakdownEstimated 仅标记插件估算的分类（前端需要运行时契约对象，故独立于 server.ts）
 contract.ts: 后端 ↔ 宿主机 RPC 契约（listListeners / stopListener / listContextFiles）
 server.ts: 后端入口；host.ts: 宿主入口（lsof 发现端口；git ls-files / git status 与读文件系统发现上下文文件，只读）；app.tsx: 前端注册
 GLOSSARY.md: 领域词汇（上下文文件、层级、已加载 / 有改动、组 / 项），界面文案与代码命名以它为准

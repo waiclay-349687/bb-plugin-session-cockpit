@@ -2,6 +2,7 @@
 > L2 | 父级: ../CLAUDE.md
 
 ## 成员清单
+context-estimate.ts: 从 BB 终态事件和已扫描说明文件估算分类，按 provider 总占用分配整数预算。
 usage.ts: 用量领域核心，token 口径归一（按 totalTokens 恒等式判 exclusive/inclusive）、事件汇总（最新用量、回合计时）、上下文分类排序、MCP 连接器反推、缓存冷热推算
 lsof.ts: 端口发现纯逻辑，解析 lsof/ps 输出、合并 IPv4/IPv6、工作区过滤、按进程树判定归属（agent / agent-child / terminal / other，仅 agent-child 与 terminal 可停止；docker 归属由 host.ts 标注且可停止）、从进程环境的 BB_THREAD_ID 取所属线程（思路来自 Hotspot 插件，MIT）、进程显示名还原（版本号命名的二进制 → 工具名）；docker compose 端口解析与 .bb/ports.json 端口命名（思路来自 Worktree Ports 插件，MIT）
 context-files.ts: 上下文文件领域核心（词汇见 GLOSSARY.md）。发现侧：固定候选位置与要列的目录、自动记忆目录名（路径里的 / . _ 换成 -）、路径 → 层级（一个文件只属于一个层级）、git status --porcelain -z 解析（改名字段、未跟踪目录前缀、仓库子目录前缀换算）、@路径 导入解析（围栏与行内代码之外；“是不是文件”由调用方注入，本身不做 IO）。展示侧：已加载的三态合并（没有上下文明细 = 不知道）、汇总、按层级分组、就地列哪些（超过 8 个只列已加载与有改动的）、弹层按顶层目录分组、行上的名字

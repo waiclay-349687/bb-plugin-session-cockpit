@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract、zod, 以及 contract.ts 的 listenerSchema 与 contextFileSchema
- * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约
+ * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约，区分总量估算与插件分类估算
  * [POS]: 插件根的前后端共享契约 (前端 experimental_useRpcQuery 需要运行时契约对象, 故不能留在 server.ts); 消费者: server.ts (注册 handler)、components/cockpit/data.ts (读取); 与 contract.ts 的边界: contract.ts 只管 server ↔ 宿主机
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -50,6 +50,7 @@ const sessionSchema = z.object({
       capturedAt: nullableNumber,
       autoCompactAtTokens: nullableNumber,
       categories: z.array(categorySchema),
+      breakdownEstimated: z.literal(true).optional(),
       cost: z.object({ amount: z.number(), currency: z.string() }).nullable(),
       compactionOfferAt: nullableNumber,
     })

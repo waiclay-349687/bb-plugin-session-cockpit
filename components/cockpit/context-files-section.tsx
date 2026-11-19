@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 data.ts 的 useContextFiles (工作区的上下文文件: 层级、有无改动、导入) 与 useSession (上下文明细里的 Memory files 条目 = "已加载"的唯一依据); 依赖 lib/context-files.ts 的合并、分层、就地筛选与分组;
+ * [INPUT]: 依赖 data.ts 的 useContextFiles (工作区的上下文文件: 层级、有无改动、导入) 与 useSession (官方上下文明细里的 Memory files 条目 = "已加载"的唯一依据); 依赖 lib/context-files.ts 的合并、分层、就地筛选与分组;
  *          依赖宿主的 useBbNavigate (在 bb 的文件面板里预览 / 用外部编辑器打开)、experimental_useCanOpenFileExternally、copyToClipboard 与脚手架 Dialog
  * [OUTPUT]: 对外提供 ContextFilesSection: Workspace 组里的 Context files 项。收起 = 一行 (已加载数 · 总数, 不知道已加载时只写总数); 点开 = 每个有文件的层级一行; 层级再点开 = 它的文件 (超过 8 个时只就地列已加载与有改动的, 其余进可搜索的弹层)
  * [POS]: components/cockpit 的"哪些文件在给 agent 定规矩"入口 (词汇见 GLOSSARY.md); 消费者: cockpit.tsx; 与 context-section.tsx 的边界: 那边按占用多少列出上下文明细里 Memory files 分类的条目, 这里按层级列出磁盘上全部的上下文文件, 已加载只是其中一个标记
@@ -57,13 +57,13 @@ export function ContextFilesSection({ threadId, open, onToggle }: SectionProps) 
         summary={summary.loaded === null ? String(summary.total) : `${summary.loaded} loaded · ${summary.total}`}
       />
       <SectionBody open={open}>
-        <Body views={views} hostId={hostId} loadedKnown={summary.loaded !== null} />
+        <Body views={views} hostId={hostId} loadedKnown={summary.loaded !== null} breakdownEstimated={context?.breakdownEstimated} />
       </SectionBody>
     </div>
   );
 }
 
-function Body({ views, hostId, loadedKnown }: { views: ContextFileView[]; hostId: string; loadedKnown: boolean }) {
+function Body({ views, hostId, loadedKnown, breakdownEstimated }: { views: ContextFileView[]; hostId: string; loadedKnown: boolean; breakdownEstimated?: boolean }) {
   // 层级的展开状态只留在组件里: 它是"这一眼想看哪层", 不值得记进偏好
   const [expanded, setExpanded] = useState<ContextLevel[]>([]);
   const [dialogLevel, setDialogLevel] = useState<ContextLevel | null>(null);
@@ -80,7 +80,7 @@ function Body({ views, hostId, loadedKnown }: { views: ContextFileView[]; hostId
           onShowAll={() => setDialogLevel(group.level)}
         />
       ))}
-      {loadedKnown ? null : <Hint>Loaded: unknown · no context breakdown</Hint>}
+      {loadedKnown ? null : <Hint>{breakdownEstimated ? "Loaded: unknown · no provider breakdown" : "Loaded: unknown · no context breakdown"}</Hint>}
       <FilesDialog group={groups.find((group) => group.level === dialogLevel) ?? null} hostId={hostId} onClose={() => setDialogLevel(null)} />
     </div>
   );

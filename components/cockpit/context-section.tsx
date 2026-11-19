@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 data.ts 的 useSession/useNow、lib/usage.ts 的标签与工具名推断、lib/palette.ts 配色、宿主 FileLink 与 threads.compact、脚手架 Dialog
- * [OUTPUT]: 对外提供 ContextSection: Context 分区的渐进展示 (一行摘要 → 就地展开分类明细 → 分类再就地展开前 8 个条目 → 更多时弹层搜索); CompactButton: 两步确认的压缩按钮 (usage-section 复用)
+ * [OUTPUT]: 对外提供 ContextSection: 官方快照与标明来源的估算分类共用 Context 分区的渐进展示 (一行摘要 → 就地展开分类明细 → 分类再就地展开前 8 个条目 → 更多时弹层搜索); CompactButton: 两步确认的压缩按钮 (usage-section 复用)
  * [POS]: 对应 Claude Desktop 的 Context 面板; 消费者: cockpit.tsx; 与 usage-section.tsx 的边界: 本分区只讲"窗口里装了什么", 消耗、额度与缓存在 Usage 分区
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -98,7 +98,7 @@ function Body({ session, ctx }: { session: SessionSnapshot; ctx: SessionContext 
       )}
       <div className="flex items-center gap-2 px-2 pt-1.5">
         <span className="min-w-0 flex-1 truncate text-[11px] leading-4 text-muted-foreground">
-          {ctx.capturedAt !== null ? `Breakdown from ${formatAgo(ctx.capturedAt, now)}` : (ctx.model ?? "")}
+          {ctx.breakdownEstimated ? <span title="Estimated from recent BB events and likely instruction files. The remainder includes system, tools and unobserved content.">Estimated breakdown</span> : ctx.capturedAt !== null ? `Breakdown from ${formatAgo(ctx.capturedAt, now)}` : (ctx.model ?? "")}
         </span>
         <CompactButton threadId={session.threadId} disabled={session.running} />
       </div>

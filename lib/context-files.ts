@@ -2,7 +2,7 @@
  * [INPUT]: 无外部依赖 (不碰 node:path / node:os: 本文件同时进浏览器包, home 与"是不是文件"由调用方传入)
  * [OUTPUT]: 对外提供上下文文件的纯逻辑: CONTEXT_LEVELS / LEVEL_LABELS / ContextFile 等类型; 发现侧 (host.ts 用) candidatePaths / listedDirs / parentDirs / memorySlug / classifyPath / classifyRelative / compareRelative / parseGitStatus / changedMatcher / resolveImports / extractImportTokens;
  *           展示侧 (前端用) loadedEntries / mergeLoaded / summarize / groupByLevel / inlineSelection / groupByTopDir / fileLabel / relativePath
- * [POS]: lib 层的"上下文文件"领域核心 (词汇见 GLOSSARY.md): 一个文件只属于一个层级, 层级由路径唯一决定; 消费者: host.ts (发现)、contract.ts (层级枚举)、components/cockpit/context-files-section.tsx (展示)、test;
+ * [POS]: lib 层的"上下文文件"领域核心 (词汇见 GLOSSARY.md): 扫描元数据可供 context-estimate.ts 估算文件占用；一个文件只属于一个层级, 层级由路径唯一决定; 消费者: host.ts (发现)、contract.ts (层级枚举)、components/cockpit/context-files-section.tsx (展示)、test;
  *        与 lib/usage.ts 的边界: 那边管上下文窗口的占用口径, 本文件只借用它的 Memory files 分类条目来判断"已加载"
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -40,6 +40,8 @@ export interface ContextFile {
   dir: string;
   /** 工作区里有未提交改动 (含未跟踪); 仓库外的文件恒为 false */
   changed: boolean;
+  /** 扫描导入时顺带取得的磁盘字节数 */
+  sizeBytes?: number;
   /** 被本文件用 @路径 引进来的文件, 只展开一层 */
   imports: ContextImport[];
 }
@@ -289,13 +291,13 @@ export interface ContextFileView extends ContextFile {
 }
 
 /**
- * 从会话快照取"已加载"的依据。没有明细 (context 为空或没有任何分类) 返回 null = 不知道;
+ * 从会话快照取"已加载"的依据。估算明细或没有明细 返回 null = 不知道;
  * 有明细但没有 Memory files 分类 = 确实一个都没加载。
  */
 export function loadedEntries(
-  context: { categories: readonly { label: string; entries: readonly LoadedEntry[] }[] } | null | undefined,
+  context: { breakdownEstimated?: boolean; categories: readonly { label: string; entries: readonly LoadedEntry[] }[] } | null | undefined,
 ): LoadedEntry[] | null {
-  if (!context || context.categories.length === 0) return null;
+  if (!context || context.breakdownEstimated || context.categories.length === 0) return null;
   return [...(context.categories.find((category) => category.label === "Memory files")?.entries ?? [])];
 }
 

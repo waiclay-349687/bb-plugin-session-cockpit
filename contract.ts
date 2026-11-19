@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract 与 zod; 依赖 lib/context-files.ts 的层级枚举
- * [OUTPUT]: 对外提供 hostContract: server.ts 与 host.ts 之间的宿主 RPC 契约 (listListeners / stopListener / listContextFiles); listenerSchema 与 contextFileSchema 供 rpc.ts 复用
+ * [OUTPUT]: 对外提供 hostContract: server.ts 与 host.ts 之间的宿主 RPC 契约 (listListeners / stopListener / listContextFiles); listenerSchema 与 contextFileSchema（含扫描所得字节数）供 rpc.ts 复用
  * [POS]: 插件根的跨进程契约层; 消费者: server.ts (bb.hosts.experimental_client)、host.ts (experimental_defineHostEntry); 与 server.ts 内 rpcContract 的边界: 本契约只走 server↔宿主机, 前端看不到
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -42,6 +42,7 @@ export const contextFileSchema = z.object({
   dir: z.string(),
   /** 工作区里有未提交改动 (含未跟踪); 仓库外的文件恒为 false */
   changed: z.boolean(),
+  sizeBytes: z.number().int().nonnegative().optional(),
   /** 被它用 @路径 引进来的文件, 只展开一层 */
   imports: z.array(z.object({ path: z.string(), name: z.string() })),
 });

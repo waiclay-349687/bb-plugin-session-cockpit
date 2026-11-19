@@ -35,6 +35,19 @@ bb 的**线程上下文卡片**正是这个位置：
 
 内容来自另一个插件 `worktree-lineage` 写好并存盘的"全程速览"（每轮对话结束后由本机的小模型读整条对话的提要写出），本插件只读、从不触发生成，所以多显示这一处不多花额度。速览落后于对话时（比如这一轮还在跑），点开后末尾有一句“这一轮结束后更新”。没装那个插件时这一组不出现。
 
+### Context 的分类从哪里来
+
+有官方快照时，分段条、分类和条目直接使用 provider 的数据。Antigravity、Codex 等只上报总量时，面板底部显示 `Estimated breakdown`。总占用与窗口大小仍由 provider 决定，分类按以下口径估算。
+
+| 分类 | 估算口径 |
+|---|---|
+| Messages | 从最近一次窗口用量事件向前，最多取 300 条相关 BB 事件，遇到压缩或清空即止。缺少用量事件时从最新事件起算。只计已接受的用户输入、助手终态正文和可见的工具参数、命令与结果。文本或结构化参数每 4 个 UTF-8 字节约 1 token，向上取整。图片每张暂按 256 token，文件附件只计名称或引用。 |
+| Context files | 复用宿主扫描取得的磁盘字节数，按同一比例估算全局和项目根的候选说明。Codex 在同层优先选扫描到的 AGENTS.override.md，其次 AGENTS.md；Antigravity 只选 GEMINI.md。其他 provider 暂不归入文件。模块、上级目录、条件规则、自动记忆和导入均不预先计入。文件读数代表可能占用，Workspace 的 Loaded 状态仍需官方快照确认。 |
+| System & tools (est.) | 总占用减去上述两项。这里也包含未取到的历史、压缩摘要、隐藏指令及估算误差。若估算超出总占用，消息与文件的子项同比例缩小，整数之和严格等于总占用。 |
+| Free space | 窗口减去总占用，最低为零。 |
+
+估算在查询会话快照时运行，只读取 BB SDK 与现有 Context files 扫描结果。插件不读取或监听本地会话 JSONL。
+
 ### Context files：哪些文件在给 agent 定规矩
 
 上下文文件是写给 agent 看、固定它在某个范围内行为的说明文件（CLAUDE.md、AGENTS.md 这一类）。这一项把磁盘上的全部上下文文件按层级列出来，一个文件只属于一个层级：
@@ -54,7 +67,7 @@ bb 的**线程上下文卡片**正是这个位置：
 每个文件有三种可能的标记：
 
 - **已加载**（绿点和 token 数）：这份文件的内容在本对话里进过模型的上下文。唯一的依据是 provider 上下文明细里的 Memory files 条目。实测这份明细只列全局的 CLAUDE.md、项目层级的 CLAUDE.md 和自动记忆的 MEMORY.md，模块文件从不出现在里面，所以模块层级不会有已加载标记。
-- **不知道**：线程没有上下文明细时（Codex 线程，或明细还没采到），所有文件的已加载状态都是不知道——不画标记，摘要只写总数，点开后末尾有一句 `Loaded: unknown`。不会把“不知道”写成“0 个已加载”。
+- **不知道**：线程只有估算分类或尚未取得官方明细时，所有文件的已加载状态都是不知道——不画标记，摘要只写总数，点开后末尾有一句 `Loaded: unknown`。不会把“不知道”写成“0 个已加载”。
 - **有改动**（橙色 `M`）：文件在工作区里有未提交的改动（含未跟踪）。仓库之外的文件（Global、`~/.claude` 下的自动记忆）没有这个标记。
 
 被别的上下文文件用 `@路径` 引进来的文件（导入）紧贴在引它的文件下面、缩进一格、前面带 `↳`，不单独算一个层级，也不计入个数。只在 Global / Parent / Project / Local / Rules 的文件里找导入，且只有解析到真实存在的文件才算（`@get-bb/plugin-sdk` 这类包名不算）。
@@ -106,7 +119,7 @@ bb 的**线程上下文卡片**正是这个位置：
 
 ## 数据来源与口径
 
-- **上下文**：`bb.sdk.threads.context()`。Claude Code 提供分类明细，其他 provider 只有总量（此时没有展开箭头）。
+- **上下文**：`bb.sdk.threads.context()`。优先采用 provider 的官方分类，只有总量时的估算范围见上文「Context 的分类从哪里来」。
 - **Token 与缓存**：线程事件 `thread/tokenUsage/updated`。各家 `inputTokens` 口径不同（Claude 不含缓存，Codex 含缓存），按 `totalTokens` 满足哪条恒等式自动归一。Claude 的 `last` 是上一回合的合计，标为 "Last turn"。
 - **缓存冷热**：推算值，即最后一次用量上报时间 + provider 声明的 TTL。回合进行中视为使用中。Codex 不报 TTL，显示 Not reported。
 - **工作时长**：回合开始 / 结束事件，最多统计最近约 250 个回合。
@@ -157,3 +170,13 @@ bb plugin reload session-cockpit
 `bb plugin reload` 只换后端；已经打开的 bb 窗口要刷新（⌘R）才会加载新的前端包。
 
 单测用 Node 自带测试器跑 `test/*.test.ts`，样本取自真实线程并已脱敏（`test/fixtures/` 只保留用量类事件）。界面验证步骤见 `docs/HANDOFF.md`。
+
+## 同系列 BB 插件
+
+- [bb-plugin-worktree-lineage](https://github.com/waiclay-349687/bb-plugin-worktree-lineage)：左侧线程列表，按对话 / 分支树双视图展示，带软收起（Settled）、待办快跳、悬停全程速览与丝滑动效（本插件的 Progress 分区读取其速览数据）
+- [bb-plugin-session-cockpit](https://github.com/waiclay-349687/bb-plugin-session-cockpit)（本插件）：右上角会话驾驶舱，按 Progress / Usage / Workspace 分组展示阶段进度、上下文明细、缓存与本地服务
+- [bb-plugin-usage-rings](https://github.com/waiclay-349687/bb-plugin-usage-rings)：左下角侧边栏额度圆环，统一展示各家 Agent 计划用量与配速（含 Antigravity）
+
+## License
+
+MIT, see [LICENSE](LICENSE).

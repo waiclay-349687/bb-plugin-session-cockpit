@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖宿主机的 lsof / ps / docker (可选) / git (可选) 命令、工作区的 .bb/ports.json (可选) 与 Node child_process/fetch/fs; 依赖 lib/lsof.ts 的解析与归属判定、lib/context-files.ts 的层级判定与导入解析
- * [OUTPUT]: 对外提供宿主入口 (default export): listListeners 列出工作区内进程监听的端口及其归属, stopListener 结束其中可停止的一个, listContextFiles 列出工作区的上下文文件 (层级、有无改动、导入; 只读)
+ * [OUTPUT]: 对外提供宿主入口 (default export): listListeners 列出工作区内进程监听的端口及其归属, stopListener 结束其中可停止的一个, listContextFiles 列出工作区的上下文文件 (层级、有无改动、导入与扫描时的字节数; 只读)
  * [POS]: 插件的 bb.host 入口, 在线程所在机器上以完整信任运行; 消费者: server.ts 的 servers/stopServer/contextFiles RPC; 与 server.ts 的边界: 只做本机进程与文件层面的事, 不认识线程与项目
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -335,13 +335,17 @@ async function workspaceFiles(root: string, signal: AbortSignal): Promise<{ isGi
   return { isGitRepo: true, paths, status };
 }
 
-/** 读文件找导入; 太大、读不了、没有导入都返回空 */
-async function importsOf(path: string, home: string): Promise<ContextFile["imports"]> {
+/** 复用找导入所需的 stat。只回传文件大小与导入，不把正文传给服务端。 */
+async function contextMetadata(path: string, home: string): Promise<Pick<ContextFile, "imports" | "sizeBytes">> {
+  const info = await stat(path).catch(() => null);
+  if (!info?.isFile()) return { imports: [] };
+  const sizeBytes = info.size;
+  if (sizeBytes > IMPORT_READ_LIMIT) return { sizeBytes, imports: [] };
   try {
-    if ((await stat(path)).size > IMPORT_READ_LIMIT) return [];
-    return await resolveImports(await readFile(path, "utf8"), path, home, isFile);
+    const imports = await resolveImports(await readFile(path, "utf8"), path, home, isFile);
+    return { sizeBytes, imports };
   } catch {
-    return [];
+    return { sizeBytes, imports: [] };
   }
 }
 
@@ -368,7 +372,7 @@ async function discoverContextFiles(rawRoot: string, signal: AbortSignal): Promi
         path,
         ...kind,
         changed: workspace.isGitRepo && path.startsWith(inside) && isChanged(path.slice(inside.length)),
-        imports: IMPORT_LEVELS.includes(kind.level) ? await importsOf(path, home) : [],
+        ...(IMPORT_LEVELS.includes(kind.level) ? await contextMetadata(path, home) : { imports: [] }),
       };
     }),
   );
