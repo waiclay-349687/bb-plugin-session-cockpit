@@ -2,6 +2,7 @@
 > L2 | 父级: ../CLAUDE.md
 
 ## 成员清单
+- i18n.test.ts 验证双语纯度、自动语言优先级、映射与本地化格式。
 - usage.test.ts 验证用量口径、缓存与官方分类。fixtures/ 提供脱敏的用量样本。
 - context-files.test.ts 验证文件发现、层级和已加载状态。
 - context-estimate.test.ts 用合成事件验证读取追踪、压缩重置、文件去重及预算对齐。

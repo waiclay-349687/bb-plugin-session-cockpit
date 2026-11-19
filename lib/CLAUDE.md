@@ -2,6 +2,7 @@
 > L2 | 父级: ../CLAUDE.md
 
 ## 成员清单
+i18n.ts: 成对的中英文 UI 词条、语言策略解析、分类与文件标签映射。
 context-estimate.ts: 从 BB 完结事件追踪本窗口文件读取，按路径与宿主扫描关联；兜底分类复用文件归因并对齐 provider 总预算。
 usage.ts: 用量领域核心，token 口径归一（按 totalTokens 恒等式判 exclusive/inclusive）、事件汇总（最新用量、回合计时）、上下文分类排序、MCP 连接器反推、缓存冷热推算
 lsof.ts: 端口发现纯逻辑，解析 lsof/ps 输出、合并 IPv4/IPv6、工作区过滤、按进程树判定归属（agent / agent-child / terminal / other，仅 agent-child 与 terminal 可停止；docker 归属由 host.ts 标注且可停止）、从进程环境的 BB_THREAD_ID 取所属线程（思路来自 Hotspot 插件，MIT）、进程显示名还原（版本号命名的二进制 → 工具名）；docker compose 端口解析与 .bb/ports.json 端口命名（思路来自 Worktree Ports 插件，MIT）

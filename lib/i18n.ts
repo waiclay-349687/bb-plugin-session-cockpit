@@ -1,0 +1,299 @@
+/**
+ * [INPUT]: 依赖稳定的分类名、文件层级和 BB 界面语言。
+ * [OUTPUT]: 提供语言选择解析、双语词典、分类及动态文案的展示映射。
+ * [POS]: 插件共用的纯翻译层，后端分类和文件数据保留原始契约。
+ * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
+ */
+import type { ContextLevel } from "./context-files";
+
+export const LANGUAGE_MODES = ["auto", "en", "zh"] as const;
+export type LanguageMode = (typeof LANGUAGE_MODES)[number];
+export type Language = Exclude<LanguageMode, "auto">;
+
+export function languageMode(value: unknown): LanguageMode {
+  return value === "en" || value === "zh" ? value : "auto";
+}
+
+export function resolveLanguage(mode: LanguageMode, htmlLanguage?: string, browserLanguage?: string): Language {
+  return mode === "auto" ? (/^zh/i.test(htmlLanguage?.trim() || browserLanguage?.trim() || "") ? "zh" : "en") : mode;
+}
+
+// 同一个键下维护两种语言，新增文案时必须同时给出翻译。
+export const PLUGIN_DESCRIPTION = "Context breakdown, prompt cache, session tokens, dev servers, side chats and project scripts in the thread context card at each thread's upper right.";
+
+export const messages = {
+  configuration: ["Configuration", "配置"],
+  pluginDescription: [PLUGIN_DESCRIPTION, "在对话卡片查看上下文明细、提示缓存、会话用量、开发服务、旁白对话和项目脚本。"],
+  progress: ["Progress", "进度"],
+  usage: ["Usage", "用量"],
+  workspace: ["Workspace", "工作区"],
+  context: ["Context", "上下文"],
+  session: ["Session", "会话"],
+  sessionDetail: ["Session", "本次会话"],
+  sessionDetails: ["Session details", "会话详情"],
+  servers: ["Servers", "本地服务"],
+  scripts: ["Scripts", "项目脚本"],
+  contextFiles: ["Context files", "上下文文件"],
+  connectors: ["Connectors", "连接器"],
+  sideChats: ["Side chats", "旁白对话"],
+  language: ["Language", "语言"],
+  auto: ["Auto", "自动"],
+  english: ["English", "英语"],
+  chinese: ["Chinese (Simplified)", "简体中文"],
+  languageFailed: ["Could not save the language", "无法保存语言设置"],
+  hostPolish: ["Interface polish", "界面优化"],
+  chooseDetails: ["Choose details", "显示分区"],
+  sectionsHelp: ["Choose the rows shown in the desktop card and mobile banner. Choices are stored on this device.", "选择桌面卡片和手机横幅显示的分区。选择仅保存在本机。"],
+  progressRecap: ["Progress recap", "进度速览"],
+  usageAndCache: ["Session usage and cache", "会话用量与缓存"],
+  reset: ["Reset to defaults", "恢复默认设置"],
+  polishHelp: ["These options change BB’s interface across themes. The checks below flag changes after a BB update.", "这些选项适用于所有主题。下方自检会提示 BB 更新后失效的界面调整。"],
+  cardMotion: ["Card motion: slide in, smoothly shift the transcript, and keep the history rail visible", "卡片动效：平滑滑入并为正文让位，保持历史提问导航可见"],
+  desktopCursor: ["Desktop cursor: arrow on buttons and rows, hand on links, text cursor in messages", "桌面指针：按钮和列表用箭头，链接用手形，消息正文用文字光标"],
+  healthCheck: ["Health check", "界面自检"],
+  checkedAutomatically: ["Checked automatically while a thread is open", "打开对话时自动检查"],
+  checkNow: ["Check now", "立即检查"],
+  healthOk: ["Working", "正常"],
+  healthBroken: ["Stopped working", "已失效"],
+  healthSkipped: ["Not checked", "未检查"],
+  healthOff: ["Off", "已关闭"],
+  checkLocalizedHeadings: ["Localized headings and configuration", "分区标题与设置语言"],
+  failedLocalizedHeadings: ["BB changed the layout used for localized headings or configuration.", "BB 已更改分区标题或设置的页面结构。"],
+  checkOverlay: ["Card slide-in and history rail position", "卡片滑入与历史导航位置"],
+  checkCard: ["Card slide-in", "卡片滑入"],
+  checkHeight: ["Taller card", "卡片高度"],
+  checkShift: ["Smooth transcript shift", "对话区平滑让位"],
+  checkRail: ["History rail stays visible beside the card", "卡片旁的历史导航"],
+  checkCursor: ["Arrow cursor on buttons and rows", "按钮与列表的箭头指针"],
+  checkText: ["Text cursor over message text", "消息正文的文字光标"],
+  failedOverlay: ["The thread view is missing the overlay layer.", "找不到对话页的浮层。"],
+  failedCard: ["The thread card is outside the expected overlay layer.", "线程卡片已移到浮层之外。"],
+  failedHeight: ["The thread card no longer uses the taller height limit.", "卡片未采用加高后的高度上限。"],
+  failedShift: ["The transcript is missing its scrolling footer.", "对话区缺少滚动页脚。"],
+  failedRail: ["The history rail markup has changed.", "历史导航的页面结构已改变。"],
+  failedCursor: ["Some sampled controls still show a hand cursor.", "部分抽查的控件仍显示手形指针。"],
+  failedText: ["Some message paragraphs show an arrow instead of a text cursor.", "部分消息正文仍显示箭头指针。"],
+  checkFailed: ["Could not run the check", "无法执行自检"],
+  fixHelp: ["Paste the repair prompt into a BB thread to update the plugin. Turn off the affected option to dismiss future notices.", "把修复提示词粘贴到 BB 对话中即可让代理更新插件。也可关闭受影响的选项。"],
+  fixPrompt: ["BB has changed. Inspect the thread DOM and repair the selectors and health checks in components/cockpit/host-styles.ts. Run npm run check and bb plugin reload session-cockpit. Affected checks:", "BB 界面已变化。请检查对话页的页面结构，修复 components/cockpit/host-styles.ts 中的选择器和自检，再运行 npm run check 和 bb plugin reload session-cockpit。失效项目："],
+  copyFix: ["Copy repair prompt", "复制修复提示词"],
+  polishWarning: ["Session Cockpit: some interface adjustments stopped working", "会话驾驶舱：部分界面优化已失效"],
+  polishWarningHelp: ["Open Session Cockpit settings for details and a repair prompt.", "打开会话驾驶舱设置可查看详情和修复提示词。"],
+  messages: ["Messages", "对话消息"],
+  userMessages: ["User messages", "用户输入"],
+  assistantMessages: ["Assistant messages", "助手回复"],
+  toolCalls: ["Tool calls", "工具调用"],
+  toolResults: ["Tool results", "工具结果"],
+  attachments: ["Attachments", "附件"],
+  memoryFiles: ["Memory files", "记忆文件"],
+  filesRead: ["Files read", "已读文件"],
+  systemToolsEstimate: ["System & tools (est.)", "系统与工具（估算）"],
+  systemPrompt: ["System prompt", "系统提示"],
+  systemTools: ["System tools", "系统工具"],
+  mcpTools: ["MCP tools", "MCP 工具"],
+  mcpInstructions: ["MCP server instructions", "MCP 服务说明"],
+  skills: ["Skills", "技能"],
+  autoBuffer: ["Autocompact buffer", "自动压缩预留"],
+  freeSpace: ["Free space", "空闲空间"],
+  otherCategory: ["Other", "其他"],
+  estimatedBreakdown: ["Estimated breakdown", "估算明细"],
+  estimatedHelp: ["Estimated from recent BB events and instruction files. The remainder includes system, tools and unobserved content.", "根据近期 BB 事件和说明文件估算。余量包含系统、工具及无法观测的内容。"],
+  measuredAgo: ["Breakdown from {time}", "明细更新于{time}"],
+  observedHelp: ["Observed reads have estimated sizes and are shown outside the provider totals.", "已读文件大小为估算值，单独列出。"],
+  deferred: ["Available on demand", "按需加载"],
+  deferredHelp: ["Loaded on demand and excluded from current usage.", "按需加载，未计入当前用量。"],
+  contextWarning: ["{percent} left. Compact or continue in a new thread before the window fills.", "剩余 {percent}。请压缩上下文，或在新的对话中继续。"],
+  breakdownPending: ["The breakdown arrives when this turn ends.", "当前回合结束后会显示明细。"],
+  totalOnly: ["This provider reports the total only.", "当前服务商仅上报用量总数。"],
+  memoryHelp: ["Instruction and memory files reported by the provider", "服务商上报的说明与记忆文件"],
+  skillsHelp: ["Names and descriptions of skills the agent can load", "代理可加载的技能名称和说明"],
+  mcpHelp: ["Tool definitions from connected MCP servers", "已连接的 MCP 服务提供的工具定义"],
+  mcpInstructionsHelp: ["Instructions added to the system prompt by MCP servers", "MCP 服务加入系统提示的使用说明"],
+  toolsHelp: ["Definitions of the agent’s built-in tools", "代理内置工具的定义"],
+  bufferHelp: ["Space reserved for compaction before the conversation fills the window", "为上下文自动压缩预留的空间"],
+  global: ["Global", "全局"],
+  parent: ["Parent", "上级目录"],
+  project: ["Project", "项目"],
+  modules: ["Modules", "模块"],
+  local: ["Local", "本地私有"],
+  rules: ["Rules", "规则"],
+  memory: ["Memory", "自动记忆"],
+  memoryShort: ["memory", "记忆"],
+  userLevel: ["user", "用户"],
+  read: ["read", "已读"],
+  loaded: ["{count} loaded", "已加载 {count}"],
+  changedCount: ["{count} changed", "{count} 项有改动"],
+  changed: ["Uncommitted changes", "未提交的改动"],
+  changedMark: ["M", "改"],
+  fileCount: ["{count} context files", "{count} 份上下文文件"],
+  fileOfficial: ["Loaded in provider snapshot", "官方快照中的已加载文件"],
+  fileRead: ["Read since last context reset", "自上次重置上下文后已读"],
+  fileStartup: ["Estimated startup file", "推测为启动时加载的文件"],
+  loadedUnknown: ["Loaded: unknown", "加载情况未知"],
+  loadOfficialHelp: ["Provider snapshot and file reads since the last context reset. Observed read sizes are estimated.", "根据官方快照与上次重置后的读取记录显示。已读文件大小为估算值。"],
+  loadEstimatedHelp: ["Loaded status estimated from startup rules and file reads since the last context reset.", "根据启动规则与上次重置后的读取记录估算加载情况。"],
+  loadObservedHelp: ["Based on file reads since the last context reset. The provider has not reported loaded files.", "根据上次重置后的读取记录显示；服务商尚未上报已加载文件。"],
+  allSearch: ["All {count} · search", "查看全部 {count} 项 · 搜索"],
+  filterPath: ["Filter by path", "按路径筛选"],
+  filter: ["Filter items", "筛选项目"],
+  noMatches: ["No matches", "无匹配项"],
+  openPanel: ["Open in panel", "在面板中打开"],
+  openEditor: ["Open in editor", "在编辑器中打开"],
+  copyPath: ["Copy path", "复制路径"],
+  copied: ["Copied", "已复制"],
+  actionsFor: ["Actions for {name}", "{name}的操作"],
+  moreActions: ["More actions", "更多操作"],
+  showLess: ["Show less", "收起"],
+  showMore: ["Show {count} more", "再显示 {count} 项"],
+  close: ["Close", "关闭"],
+  items: ["{count} items", "{count} 项"],
+  tokens: ["{count} tokens", "{count} 词元"],
+  compact: ["Compact", "压缩"],
+  confirm: ["Confirm", "确认"],
+  compactConversation: ["Compact this conversation", "压缩此对话"],
+  confirmCompact: ["Confirm conversation compaction", "确认压缩此对话"],
+  compacting: ["Compacting context", "正在压缩上下文"],
+  compactFailed: ["Could not compact the context", "无法压缩上下文"],
+  cacheWarm: ["Cache valid · {time}", "缓存有效 · {time}"],
+  cacheCold: ["Cache cold", "缓存已冷"],
+  inUse: ["In use", "使用中"],
+  notReported: ["Not reported", "未上报"],
+  cost: ["Cost", "费用"],
+  promptCache: ["Prompt cache", "提示缓存"],
+  cacheLifetime: ["Cache lifetime: {time}", "缓存有效期：{time}"],
+  cacheReread: ["Next message re-reads {count} uncached tokens", "下一条消息将重新读取 {count} 个未缓存词元"],
+  cacheExpiry: ["Cache expires soon. Compacting now avoids re-reading {count} tokens later.", "缓存即将过期。现在压缩可避免稍后重新读取 {count} 个词元。"],
+  agentWorking: ["Agent working", "代理工作时长"],
+  sessionOpen: ["Session open {time} · {turns}", "会话已开启 {time} · {turns}"],
+  turn: ["{count} turn", "{count} 回合"],
+  turns: ["{count} turns", "{count} 回合"],
+  tokenDetails: ["Tokens", "词元"],
+  cacheRateHelp: ["Cache hit rate = cache reads divided by all prompt tokens in this session", "缓存命中率为本会话缓存读取量除以提示词元总量"],
+  cached: ["{percent} cached", "缓存命中 {percent}"],
+  cacheReadWrite: ["Cache read · write", "缓存读取 · 写入"],
+  output: ["Output", "输出"],
+  lastTurn: ["Last turn in · out", "上一回合输入 · 输出"],
+  lastTurnHelp: ["Totals for the entire last turn", "统计上一回合的全部请求"],
+  done: ["Done", "已完成"],
+  doing: ["In progress", "进行中"],
+  dropped: ["Dropped", "已放弃"],
+  writtenWhenDone: ["Written when this turn ends", "本回合结束后生成"],
+  updatesWhenDone: ["Updates when this turn ends.", "本回合结束后更新。"],
+  progressStage: ["Stage {count}", "第 {count} 阶段"],
+  progressFallback: ["Thread progress", "对话进度"],
+  toolsLoaded: ["Tools loaded", "工具已加载"],
+  toolsOnDemand: ["Tools load on demand", "工具按需加载"],
+  onDemandCount: ["{count} on demand", "{count} 项按需加载"],
+  connectorHelp: ["{activeCount} · {deferredCount} · {size}. Based on this session’s context.", "{activeCount} · {deferredCount} · {size}。来自本次会话的上下文。"],
+  runningCount: ["{count} running", "{count} 个运行中"],
+  otherPort: ["{count} other port", "{count} 个其他端口"],
+  otherPorts: ["{count} other ports", "{count} 个其他端口"],
+  otherThreadsPorts: ["{count} from agents & other threads", "{count} 个来自代理或其他对话"],
+  hidePorts: ["Hide other ports", "收起其他端口"],
+  otherThread: ["Other thread", "其他对话"],
+  agent: ["Agent", "代理"],
+  agentSession: ["{name} session", "{name} 会话"],
+  terminal: ["Terminal", "终端"],
+  container: ["Container {name}", "容器 {name}"],
+  process: ["Process {pid}", "进程 {pid}"],
+  open: ["Open", "打开"],
+  copyUrl: ["Copy URL", "复制地址"],
+  stop: ["Stop {name}", "停止 {name}"],
+  confirmStop: ["Confirm stop", "确认停止"],
+  stopped: ["Server stopped", "服务已停止"],
+  stopFailed: ["Could not stop the server", "无法停止服务"],
+  add: ["Add", "添加"],
+  addScript: ["Add project script", "添加项目脚本"],
+  started: ["Started “{name}” in a terminal", "已在终端运行“{name}”"],
+  startFailed: ["Could not start the script", "无法启动脚本"],
+  scriptRun: ["Run: {command}", "运行：{command}"],
+  scriptRunPreview: ["Run: {command}, then open {url}", "运行：{command}，然后打开 {url}"],
+  run: ["Run", "运行"],
+  openPreview: ["Open preview", "打开预览"],
+  copyCommand: ["Copy command", "复制命令"],
+  edit: ["Edit", "编辑"],
+  remove: ["Remove", "删除"],
+  confirmRemove: ["Confirm removal", "确认删除"],
+  removeFailed: ["Could not remove the script", "无法删除脚本"],
+  saveFailed: ["Could not save the script", "无法保存脚本"],
+  scriptName: ["Script name", "脚本名称"],
+  scriptNameExample: ["Name · Dev server", "名称 · 开发服务"],
+  command: ["Command", "命令"],
+  commandExample: ["Command · npm run dev", "命令 · npm run dev"],
+  previewUrl: ["Preview URL", "预览地址"],
+  previewExample: ["Preview URL (optional) · http://localhost:5173", "预览地址（可选）· http://localhost:5173"],
+  keyboardSave: ["Enter to save · Esc to cancel", "回车保存 · 退出键取消"],
+  cancel: ["Cancel", "取消"],
+  save: ["Save", "保存"],
+  saving: ["Saving…", "正在保存…"],
+  renameFailed: ["Could not rename the side chat", "无法重命名旁白对话"],
+  sideChatName: ["Side chat name", "旁白对话名称"],
+  untitledSideChat: ["Untitled side chat", "未命名的旁白对话"],
+  openSplit: ["Open in split", "在分屏中打开"],
+  rename: ["Rename", "重命名"],
+  working: ["Working", "运行中"],
+  waiting: ["Waiting for you", "等待回复"],
+  justNow: ["just now", "刚刚"],
+  now: ["now", "现在"],
+  ago: ["{time} ago", "{time}前"],
+  day: ["{value}d", "{value} 天"],
+  hour: ["{value}h", "{value} 小时"],
+  minute: ["{value}m", "{value} 分钟"],
+  second: ["{value}s", "{value} 秒"],
+  ttlHour: ["{value} hour", "{value} 小时"],
+  ttlHours: ["{value} hours", "{value} 小时"],
+  ttlMinute: ["{value} minute", "{value} 分钟"],
+  ttlMinutes: ["{value} minutes", "{value} 分钟"],
+} as const satisfies Record<string, readonly [string, string]>;
+
+export type MessageKey = keyof typeof messages;
+export type Text = (key: MessageKey, args?: Record<string, string | number>) => string;
+
+const translator = (index: 0 | 1): Text => (key, args) =>
+  messages[key][index].replace(/\{(\w+)\}/g, (placeholder, name: string) => String(args?.[name] ?? placeholder));
+
+export const textFor: Record<Language, Text> = { en: translator(0), zh: translator(1) };
+
+const CATEGORY_KEYS = {
+  Messages: "messages",
+  "Context files": "contextFiles",
+  "Memory files": "memoryFiles",
+  "Files read": "filesRead",
+  "System & tools (est.)": "systemToolsEstimate",
+  "System prompt": "systemPrompt",
+  "System tools": "systemTools",
+  "MCP tools": "mcpTools",
+  "MCP server instructions": "mcpInstructions",
+  Skills: "skills",
+  "Autocompact buffer": "autoBuffer",
+  "Free space": "freeSpace",
+  "User messages": "userMessages",
+  "Assistant messages": "assistantMessages",
+  "Tool calls": "toolCalls",
+  "Tool results": "toolResults",
+  Attachments: "attachments",
+} as const satisfies Record<string, MessageKey>;
+
+export function categoryText(t: Text, label: string): string {
+  const name = label.replace(/\s*\(deferred\)$/i, "");
+  return t(Object.hasOwn(CATEGORY_KEYS, name) ? CATEGORY_KEYS[name as keyof typeof CATEGORY_KEYS] : "otherCategory");
+}
+
+export function levelText(t: Text, level: ContextLevel): string {
+  return t(level);
+}
+
+export function fileEntryText(t: Text, label: string): string {
+  const levels = { Global: "global", Parent: "parent", Project: "project", Modules: "modules", Local: "local", Rules: "rules", Memory: "memory" } as const;
+  const [prefix, ...rest] = label.split(" · ");
+  return rest.length && Object.hasOwn(levels, prefix) ? `${t(levels[prefix as keyof typeof levels])} · ${rest.join(" · ")}` : label;
+}
+
+/** 跨插件摘要是自由文本，语言不合时由调用方使用本地化占位或省略。 */
+export function matchingProse(language: Language, value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const han = /\p{Script=Han}/u.test(value);
+  if (language === "en") return han ? undefined : value;
+  // 摘要不是插件生成的，不能保证是单一语言；混入成段的英文时用本地化占位。
+  return han && !/[A-Za-z]{2,}(?: +[A-Za-z]{2,}){2,}/.test(value) ? value : undefined;
+}

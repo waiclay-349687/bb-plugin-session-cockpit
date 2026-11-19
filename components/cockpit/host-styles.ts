@@ -1,16 +1,67 @@
 /**
  * [INPUT]: 依赖 bb 应用外壳的 DOM 结构 (见 HOOKS 清单)、prefs.ts 的开关、sonner 的 toast
- * [OUTPUT]: 对外提供 mountHostStyles (内容脚本入口)、useHostHealth / recheckHostHealth (设置页显示与手动复查)、FIX_PROMPT
+ * [OUTPUT]: 对外提供 mountHostStyles (内容脚本入口)、useHostHealth / recheckHostHealth、repairPrompt 与实时宿主分区标题同步
  * [POS]: 插件对 bb 宿主界面的全部"越界"改动都集中在这里, 与主题无关、任何主题下都生效:
  *        (1) 线程上下文卡片的出入场 (在会话之间切换时不重播入场: 卡片留在原地只换内容)、对话区平滑让位、历史导航条不被挤掉、卡片上限从 36rem 提到 54rem (2) 桌面习惯的箭头光标 (链接留手形、消息正文保留文字光标)。
  *        这些规则依赖 bb 未承诺稳定的结构, 所以同文件里带自检: 结构变了就提醒, 并给出修复办法。
  *        消费者: app.tsx (contentScripts.register)、settings-section.tsx
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { experimental_copyToClipboard as copyToClipboard } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
+import { currentText, useText, notifyCockpit } from "./language";
+import { PLUGIN_DESCRIPTION, type MessageKey, type Text } from "../../lib/i18n";
 import { readPrefs, subscribePrefs } from "./prefs";
+
+function slotTitle(section: Element) {
+  const heading = section.querySelector("[data-thread-context-card-heading], :scope > div > h3");
+  return heading?.querySelector(".truncate") ?? heading;
+}
+
+/** SDK 注册只收固定标题。把已挂载的标题同步到当前语言，仅操作插件所在的宿主分区。 */
+export function useHostHeading<Element extends HTMLElement = HTMLSpanElement>(key: MessageKey, kind: "card" | "banner" = "card") {
+  const t = useText();
+  const ref = useRef<Element>(null);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (kind === "banner") {
+      const group = node?.closest('[role="group"][aria-label]');
+      if (group) group.setAttribute("aria-label", t(key));
+      return;
+    }
+    const section = node?.closest("[data-thread-context-card-section]");
+    const title = section && slotTitle(section);
+    if (title && title.textContent !== t(key)) title.textContent = t(key);
+    if (section?.hasAttribute("aria-label")) section.setAttribute("aria-label", t(key));
+  });
+  return ref;
+}
+
+/** 当前设置页由插件绘制语言选择器；隐藏宿主根据同一配置自动生成的重复行。 */
+export function useHostSettingsChrome() {
+  const ref = useRef<HTMLLabelElement>(null);
+  const t = useText();
+  useLayoutEffect(() => {
+    const section = ref.current?.closest("[data-resource-detail-section]");
+    if (!section) return;
+    const native = section.querySelector<HTMLElement>('[data-settings-anchor="Language"]');
+    const heading = section.querySelector("h2, h3");
+    const previousDisplay = native?.style.display;
+    const previousHeading = heading?.textContent;
+    if (native) native.style.display = "none";
+    if (heading?.textContent === "Configuration") heading.textContent = t("configuration");
+    const detail = section.closest('div[class~="max-w-5xl"]');
+    const description = detail && Array.from(detail.querySelectorAll("p, span.break-words")).find(node => node.textContent === PLUGIN_DESCRIPTION);
+    if (description) description.textContent = t("pluginDescription");
+    return () => {
+      if (native) native.style.display = previousDisplay ?? "";
+      if (heading && previousHeading != null) heading.textContent = previousHeading;
+      if (description) description.textContent = PLUGIN_DESCRIPTION;
+    };
+  }, [t]);
+  return ref;
+}
 
 const EASE = "var(--glass-ease, cubic-bezier(0.165, 0.84, 0.44, 1))";
 
@@ -83,18 +134,18 @@ export type HookStatus = "ok" | "broken" | "skipped" | "off";
 export interface HookResult {
   id: string;
   /** 这条钩子管的效果 */
-  label: string;
+  label: MessageKey;
   status: HookStatus;
   /** 失效时的表现与原因 */
-  detail: string;
+  detail: MessageKey | null;
 }
 
 interface Hook {
   id: string;
-  label: string;
-  block: "cardMotion" | "desktopCursor";
+  label: MessageKey;
+  block?: "cardMotion" | "desktopCursor";
   /** 返回 null = 前提不满足; true = 正常; 字符串 = 失效原因 */
-  check(): null | true | string;
+  check(): null | true | MessageKey;
 }
 
 const inThreadView = () => document.querySelector("form[data-promptbox]") !== null && document.querySelector("[data-timeline-row-id]") !== null;
@@ -102,17 +153,32 @@ const inPopover = (el: Element) => el.closest("[data-radix-popper-content-wrappe
 
 const HOOKS: Hook[] = [
   {
+    id: "localized-headings",
+    label: "checkLocalizedHeadings",
+    check() {
+      const markers = Array.from(document.querySelectorAll("[data-cockpit-group-heading]"));
+      const settings = document.querySelector("[data-cockpit-language]")?.closest("[data-resource-detail-section]");
+      if (markers.length === 0 && !settings) return null;
+      for (const marker of markers) {
+        const section = marker.closest("[data-thread-context-card-section]");
+        if (!section || !slotTitle(section)) return "failedLocalizedHeadings";
+      }
+      const native = settings?.querySelector('[data-settings-anchor="Language"]');
+      return !native || getComputedStyle(native).display === "none" ? true : "failedLocalizedHeadings";
+    },
+  },
+  {
     id: "overlay",
-    label: "Card slide-in and history rail position",
+    label: "checkOverlay",
     block: "cardMotion",
     check() {
       if (!inThreadView()) return null;
-      return document.querySelector("[data-scroll-overlay]") ? true : "The thread view no longer has a [data-scroll-overlay] layer.";
+      return document.querySelector("[data-scroll-overlay]") ? true : "failedOverlay";
     },
   },
   {
     id: "card",
-    label: "Card slide-in",
+    label: "checkCard",
     block: "cardMotion",
     check() {
       // 用无障碍标签找卡片, 再看它是否还带着样式规则依赖的标记和位置
@@ -120,12 +186,12 @@ const HOOKS: Hook[] = [
       if (cards.length === 0) return null;
       return cards.every((el) => el.matches("[data-scroll-overlay] > [data-thread-context-card]"))
         ? true
-        : "The thread context card is no longer a [data-thread-context-card] directly inside [data-scroll-overlay].";
+        : "failedCard";
     },
   },
   {
     id: "height",
-    label: "Taller card",
+    label: "checkHeight",
     block: "cardMotion",
     check() {
       const card = document.querySelector<HTMLElement>("[data-scroll-overlay] > [data-thread-context-card]:not([hidden])");
@@ -137,24 +203,24 @@ const HOOKS: Hook[] = [
       // 算出来的 max-height 是一个 min(864px, 100% - 24px) 这样的表达式，不是数字：按里面有没有我们设的那个上限来判断
       const maxHeight = getComputedStyle(card).maxHeight;
       const applied = maxHeight.includes(`${TALL_CARD_REM * rem}px`) || parseFloat(maxHeight) > 36 * rem + 1;
-      return applied ? true : "The thread context card no longer takes the taller max-height.";
+      return applied ? true : "failedHeight";
     },
   },
   {
     id: "shift",
-    label: "Smooth transcript shift",
+    label: "checkShift",
     block: "cardMotion",
     check() {
       const card = document.querySelector<HTMLElement>("[data-scroll-overlay] > [data-thread-context-card]:not([hidden])");
       if (!card) return null;
       const scroller = document.querySelector<HTMLElement>("div:has(> [data-scroll-footer])");
-      if (!scroller) return "The scrolling transcript no longer contains a [data-scroll-footer] child.";
+      if (!scroller) return "failedShift";
       return true;
     },
   },
   {
     id: "rail",
-    label: "History rail stays visible beside the card",
+    label: "checkRail",
     block: "cardMotion",
     check() {
       const overlay = document.querySelector("[data-scroll-overlay]");
@@ -164,12 +230,12 @@ const HOOKS: Hook[] = [
         (el) => !el.matches("[data-thread-context-card], span[aria-hidden]") && getComputedStyle(el).pointerEvents !== "none",
       );
       if (others.length === 0) return null;
-      return others.every((el) => el.classList.contains("my-auto")) ? true : "The history rail in [data-scroll-overlay] no longer has the my-auto class.";
+      return others.every((el) => el.classList.contains("my-auto")) ? true : "failedRail";
     },
   },
   {
     id: "cursor",
-    label: "Arrow cursor on buttons and rows",
+    label: "checkCursor",
     block: "desktopCursor",
     check() {
       const buttons = Array.from(document.querySelectorAll<HTMLElement>("button:not(:disabled), a[data-sidebar-thread-id]"))
@@ -180,13 +246,13 @@ const HOOKS: Hook[] = [
       // 个别第三方控件可能自带手形, 不算失效; 超过两成才说明 bb 换了加手形的方式
       return hands.length <= buttons.length * 0.2
         ? true
-        : `${hands.length} of ${buttons.length} sampled controls still show a hand cursor; bb no longer sets it with a cursor-pointer class.`;
+        : "failedCursor";
     },
   },
   {
     // 反向自检: 光标规则不许波及消息正文 (正文要能显示文字光标, 才看得出可以选字 Add to chat)
     id: "text",
-    label: "Text cursor over message text",
+    label: "checkText",
     block: "desktopCursor",
     check() {
       const blocks = Array.from(document.querySelectorAll<HTMLElement>("[data-timeline-row-id] :is(p, li, td)"))
@@ -197,7 +263,7 @@ const HOOKS: Hook[] = [
       const arrows = blocks.filter((el) => getComputedStyle(el).cursor === "default");
       return arrows.length === 0
         ? true
-        : `${arrows.length} of ${blocks.length} message paragraphs show an arrow instead of the text cursor; a CURSOR_CSS rule now matches a container around message text.`;
+        : "failedText";
     },
   },
 ];
@@ -207,7 +273,7 @@ let checkedAt: number | null = null;
 const healthListeners = new Set<() => void>();
 let snapshot: { results: HookResult[]; checkedAt: number | null } = { results, checkedAt };
 
-const HEALTH_KEY = "bb-plugin-session-cockpit:host-health";
+const HEALTH_KEY = "bb-plugin-session-cockpit:host-health:v2";
 
 /** 上次在线程页上查到的结果; 设置页上没有线程视图, 靠它显示"最近一次的结论" */
 function loadStored(): HookResult[] {
@@ -223,20 +289,20 @@ function runChecks(): HookResult[] {
   const prefs = readPrefs();
   const previous = new Map((results.length > 0 ? results : loadStored()).map((r) => [r.id, r]));
   results = HOOKS.map((hook) => {
-    if (!prefs.hostStyles[hook.block]) return { id: hook.id, label: hook.label, status: "off" as const, detail: "Turned off in settings." };
-    let outcome: null | true | string;
+    if (hook.block && !prefs.hostStyles[hook.block]) return { id: hook.id, label: hook.label, status: "off" as const, detail: null };
+    let outcome: null | true | MessageKey;
     try {
       outcome = hook.check();
-    } catch (error) {
-      outcome = error instanceof Error ? error.message : "Check failed";
+    } catch {
+      outcome = "checkFailed";
     }
     if (outcome === null) {
       // 前提不满足 (不在线程页、卡片没开): 保留上一次的有效结论, 不把它冲成"未检查"
       const last = previous.get(hook.id);
       if (last && (last.status === "ok" || last.status === "broken")) return { ...last, label: hook.label };
-      return { id: hook.id, label: hook.label, status: "skipped" as const, detail: "Not on screen yet. Open a thread with the context card." };
+      return { id: hook.id, label: hook.label, status: "skipped" as const, detail: null };
     }
-    return { id: hook.id, label: hook.label, status: outcome === true ? ("ok" as const) : ("broken" as const), detail: outcome === true ? "" : outcome };
+    return { id: hook.id, label: hook.label, status: outcome === true ? ("ok" as const) : ("broken" as const), detail: outcome === true ? null : outcome };
   });
   checkedAt = Date.now();
   try {
@@ -250,13 +316,9 @@ function runChecks(): HookResult[] {
 }
 
 /** 给 agent 的修复指令: 失效时复制给任意线程即可 */
-export const FIX_PROMPT = [
-  "Session Cockpit 插件对 bb 界面的样式钩子在 bb 升级后失效了。",
-  "请打开 ~/Downloads/GitHub/bb-plugin-session-cockpit/components/cockpit/host-styles.ts，",
-  "对照当前 bb 线程页的真实 DOM（用 bb browser-automation 打开 http://127.0.0.1:38886 检查），",
-  "修正 CARD_MOTION_CSS / CURSOR_CSS 里的选择器和 HOOKS 里对应的自检，然后 npm run check 并 bb plugin reload session-cockpit。",
-  "失效的钩子：",
-].join("\n");
+export function repairPrompt(t: Text, broken: readonly HookResult[]) {
+  return [t("fixPrompt"), ...broken.map(r => `- ${t(r.label)} · ${t(r.detail ?? "checkFailed")}`)].join("\n");
+}
 
 const NOTIFIED_KEY = "bb-plugin-session-cockpit:host-health-notified";
 const RENOTIFY_MS = 24 * 3600_000;
@@ -273,13 +335,14 @@ function notifyIfBroken(current: HookResult[]) {
   } catch {
     // 读写失败就照常提醒
   }
-  const prompt = `${FIX_PROMPT}\n${broken.map((r) => `- ${r.id}: ${r.detail}`).join("\n")}`;
-  toast.warning("Session Cockpit: bb changed, some polish stopped working", {
-    description: `${broken.map((r) => r.label).join("; ")}. bb falls back to its stock behavior. Details and a fix are in Settings → Plugins → Session Cockpit.`,
+  const t = currentText();
+  toast.warning(t("polishWarning"), {
+    description: t("polishWarningHelp"),
+    id: "session-cockpit:host-warning",
     duration: 20_000,
     action: {
-      label: "Copy fix prompt",
-      onClick: () => void copyToClipboard({ text: prompt }).then((ok) => ok && toast.success("Copied")),
+      label: t("copyFix"),
+      onClick: () => void copyToClipboard({ text: repairPrompt(currentText(), broken) }).then(ok => ok && notifyCockpit("success", "copied")),
     },
   });
 }

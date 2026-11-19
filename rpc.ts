@@ -1,11 +1,12 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract、zod, 以及 contract.ts 的 listenerSchema 与 contextFileSchema
- * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约，含上下文文件的官方、启动估算和观测来源
+ * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约，含语言设置及上下文文件来源
  * [POS]: 插件根的前后端共享契约 (前端 experimental_useRpcQuery 需要运行时契约对象, 故不能留在 server.ts); 消费者: server.ts (注册 handler)、components/cockpit/data.ts (读取); 与 contract.ts 的边界: contract.ts 只管 server ↔ 宿主机
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { LANGUAGE_MODES } from "./lib/i18n";
 import { contextFileSchema, listenerSchema } from "./contract";
 
 const threadInput = z.object({ threadId: z.string().min(1) }).strict();
@@ -128,7 +129,10 @@ const contextFilesSchema = z.object({
 });
 export type ContextFilesResult = z.infer<typeof contextFilesSchema>;
 
+const languageConfig = z.object({ language: z.enum(LANGUAGE_MODES) });
 export const rpcContract = defineRpcContract({
+  language: { input: z.object({}).strict(), output: languageConfig, tags: () => ["language"] },
+  setLanguage: { input: languageConfig.strict(), output: languageConfig },
   contextFiles: {
     input: threadInput,
     output: contextFilesSchema,

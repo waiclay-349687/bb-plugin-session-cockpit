@@ -1,10 +1,12 @@
 /**
- * [INPUT]: 依赖 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery 跨插件读取 worktree-lineage 插件的 briefing RPC (存盘的"全程速览" + 是否落后 + 兜底摘要); 依赖 data.ts 的 useSession (本轮是否在跑、已完成几轮, 用来决定何时重读)
+ * [INPUT]: 依赖双语状态与 依赖 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery 跨插件读取 worktree-lineage 插件的 briefing RPC (存盘的"全程速览" + 是否落后 + 兜底摘要); 依赖 data.ts 的 useSession (本轮是否在跑、已完成几轮, 用来决定何时重读)
  * [OUTPUT]: 对外提供 ProgressSection: Progress 组里唯一的一项。收起时一行 = 当前阶段 + 完成数 (如 "● 右上角 Session 插件  3/5"); 点开 = 一句话概括 + 完整的阶段轨道 (每个阶段带结论)
  * [POS]: components/cockpit 的"这条对话到哪了"分区; 消费者: cockpit.tsx; 与 worktree-lineage 的边界: 速览由那个插件在每轮结束时让小模型写好并存盘, 这里只读、从不触发生成, 所以多显示一处不多花一分额度;
  *        那个插件没装、被停用或返回的形状对不上时, 本分区不显示
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
+import { useTranslation, useText } from "./language";
+import { matchingProse } from "../../lib/i18n";
 import { useEffect, useRef } from "react";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
@@ -67,17 +69,17 @@ function useBriefing(threadId: string) {
   return query.data;
 }
 
-const STAGE_LABEL: Record<Stage["state"], string> = { done: "Done", doing: "In progress", dropped: "Dropped" };
 
 /** 阶段标记: 完成是绿底对勾, 进行中是实心点, 放弃是灰底短横; 颜色只用主题变量 */
 function StageMark({ state }: { state: Stage["state"] }) {
+  const t = useText();
   const tint = state === "done" ? "var(--success)" : state === "doing" ? "var(--primary)" : "var(--muted-foreground)";
   return (
     <span
       className="flex size-3.5 shrink-0 items-center justify-center rounded-full"
       style={{ background: `color-mix(in oklab, ${tint} ${state === "dropped" ? 14 : 18}%, transparent)`, color: tint }}
       role="img"
-      aria-label={STAGE_LABEL[state]}
+      aria-label={t(state)}
     >
       {state === "done" ? (
         <Icon name="Check" className="size-2.5" aria-hidden />
@@ -92,6 +94,7 @@ function StageMark({ state }: { state: Stage["state"] }) {
 
 /** 点开后的完整轨道: 每个阶段一行名称 + 它的结论, 标记之间用细线连起来 */
 function Stages({ stages }: { stages: readonly Stage[] }) {
+  const { t, language } = useTranslation();
   return (
     <ol className="px-2 pt-2">
       {stages.map((stage, index) => (
@@ -101,8 +104,8 @@ function Stages({ stages }: { stages: readonly Stage[] }) {
             <StageMark state={stage.state} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className={stage.state === "dropped" ? "text-xs leading-4 text-muted-foreground" : "text-xs font-medium leading-4 text-foreground"}>{stage.title}</div>
-            {stage.note ? <div className="text-[11px] leading-4 text-muted-foreground">{stage.note}</div> : null}
+            <div className={stage.state === "dropped" ? "text-xs leading-4 text-muted-foreground" : "text-xs font-medium leading-4 text-foreground"}>{matchingProse(language, stage.title) ?? t("progressStage", { count: index + 1 })}</div>
+            {matchingProse(language, stage.note) ? <div className="text-[11px] leading-4 text-muted-foreground">{stage.note}</div> : null}
           </div>
         </li>
       ))}
@@ -116,6 +119,7 @@ function headline(stages: readonly Stage[]): Stage | undefined {
 }
 
 export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
+  const { t, language } = useTranslation();
   const view = useBriefing(threadId);
   // 插件没装 / 用户关了速览 / 还一轮都没聊: 没有可显示的东西 (整组连组名一起不出现)
   if (!view || !view.enabled || (view.briefing === null && view.recap.turns === 0)) return null;
@@ -125,7 +129,7 @@ export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
     return (
       <div data-cockpit-item="" className="flex h-6.5 items-center gap-2 px-2 text-xs text-muted-foreground pointer-coarse:h-9">
         <Icon name="ListTodo" fallback="Circle" className="size-3.5 shrink-0" aria-hidden />
-        <span>Written when this turn ends</span>
+        <span>{t("writtenWhenDone")}</span>
       </div>
     );
   }
@@ -137,8 +141,8 @@ export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
     <div>
       <SectionRow
         leading={current ? <StageMark state={current.state} /> : undefined}
-        label={current?.title ?? briefing.about}
-        title={briefing.about}
+        label={current ? matchingProse(language, current.title) ?? t("progressStage", { count: briefing.stages.indexOf(current) + 1 }) : t("progressFallback")}
+        title={matchingProse(language, briefing.about)}
         priority="label"
         open={open}
         onToggle={onToggle}
@@ -149,9 +153,9 @@ export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
         }
       />
       <SectionBody open={open}>
-        <p className="px-2 pt-0.5 text-xs leading-4 text-foreground">{briefing.about}</p>
+        <p className="px-2 pt-0.5 text-xs leading-4 text-foreground">{matchingProse(language, briefing.about) ?? t("progressFallback")}</p>
         <Stages stages={briefing.stages} />
-        {behind ? <p className="px-2 pt-2 text-[11px] leading-4 text-muted-foreground">Updates when this turn ends.</p> : null}
+        {behind ? <p className="px-2 pt-2 text-[11px] leading-4 text-muted-foreground">{t("updatesWhenDone")}</p> : null}
       </SectionBody>
     </div>
   );

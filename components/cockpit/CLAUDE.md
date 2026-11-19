@@ -2,6 +2,8 @@
 > L2 | 父级: ../../CLAUDE.md
 
 ## 成员清单
+language.tsx: app overlay 订阅语言设置 RPC，维护本地初始化镜像和实时外部存储，导出即时切换与本地化格式化 hook。
+
 cockpit.tsx: 组合层。GROUPS 是分组的唯一真相源（Progress / Usage（Context、Session）/ Workspace（Servers、Scripts、Context files、Connectors、Side chats），组的顺序 = 重要程度），CockpitGroup 渲染一组里的各项（桌面卡片：app.tsx 把每组注册成 bb 卡片的一个分区，组名和分隔线由 bb 画），Cockpit 渲染全部分组并自己画组名与分隔线（横幅详情用，没有内容的组用 :has 整组隐藏）；SectionProps
 data.ts: 数据入口，useSession/useSideChats/useScripts（experimental_useRpcQuery，服务端失效刷新，Context files 展开时会话快照也按 30s 轮询）、useServers 与 useContextFiles（挂载取一次，项展开且页面可见时 30s 重取，共用内部的 usePollWhile；refetch 经 ref 取，不进 effect 依赖；上下文文件另在回合结束时由服务端失效刷新）、useNow
 prefs.ts: 本机偏好（localStorage v6，读不到时从 v5 / v4 迁移（保留隐藏项与样式开关，清掉展开状态） + useSyncExternalStore），SECTION_DEFS 是分区清单与顺序的唯一真相源，open 记录展开着的项（默认全部收起）、hostStyles 记录界面修饰开关
@@ -12,8 +14,8 @@ usage-section.tsx: Usage 组里的 Session 项：摘要（本会话 token + 缓�
 context-files-section.tsx: Workspace 组里的 Context files 项（词汇见 GLOSSARY.md）：contextFiles RPC 提供磁盘清单，session RPC 提供官方、启动估算与观测读取的文件统计。三层：收起一行（`3/80 loaded · ≈1.2%`，没有窗口数据时省略占比）→ 每个有文件的层级一行（Global / Parent / Project / Modules / Local / Rules / Memory：个数、已加载数、有改动的 M、箭头；层级的展开状态只留在组件里）→ 层级的文件（行体在 bb 的文件面板里预览，行尾菜单 Open in panel / Open in editor（能打开时才有）/ Copy path；已加载 = token 数 + 绿点，有改动 = 橙色 M；导入紧贴在导入者下面再缩进一格、前缀 ↳；模块写目录路径，放不下时从中间省略）。一个层级超过 8 个文件时只就地列已加载与有改动的（自动记忆的 MEMORY.md 恒在最前，最多 8 个），其余进 `All N · search` 弹层：模块按顶层目录分组（按个数降序，一两个文件的并进 other），可按路径过滤，点一项预览并关闭。没有任何上下文文件时返回 null
 list-sections.tsx: Servers（本线程的可停止服务在前，agent 会话端口与其他线程的服务折叠并标 Other thread；agent-child / terminal / docker 可停止；行体打开、菜单里打开/复制/停止）/ Scripts（行体运行、可带预览地址自动打开；菜单里运行/预览/复制/编辑/删除）/ Connectors / Side chats（有才显示、行体分屏打开、菜单改名），各自带摘要行
 compact.tsx: 横幅入口，SessionSegmentSummary（摘要即开关）与 SessionSegmentDetails（横幅下方展开 Cockpit，限高 50dvh）；手机与窄窗格上的唯一入口
-host-styles.ts: 对 bb 宿主界面的全部样式改动（内容脚本注入，与主题无关）：卡片出入场与对话区平滑让位、历史导航条不被挤掉、卡片上限从 36rem 提到 54rem、在会话之间切换时卡片不重播入场（导航发生且卡片开着时在 <html> 上打 0.7 秒标记，期间新卡片跳过过渡）、桌面箭头光标（链接留手形、正文保留文字光标）；自带七项结构自检（HOOKS，含"正文不许变箭头"的反向自检），失效时 toast 提醒并给修复指令
-settings-section.tsx: 插件设置页，ChooseDetailsSettings（分区开关、重置）与 HostStylesSettings（宿主样式开关、开关后立即复查、自检结论含 Off、复制修复指令）
+host-styles.ts: 同步 SDK 固定注册标题及设置页配置文案，为自检返回翻译键。对 bb 宿主界面的全部样式改动（内容脚本注入，与主题无关）：卡片出入场与对话区平滑让位、历史导航条不被挤掉、卡片上限从 36rem 提到 54rem、在会话之间切换时卡片不重播入场（导航发生且卡片开着时在 <html> 上打 0.7 秒标记，期间新卡片跳过过渡）、桌面箭头光标（链接留手形、正文保留文字光标）；自带结构自检（HOOKS，含"正文不许变箭头"的反向自检），失效时 toast 提醒并给修复指令
+settings-section.tsx: 插件设置页（语言选择通过 RPC 保存），ChooseDetailsSettings（分区开关、重置）与 HostStylesSettings（宿主样式开关、开关后立即复查、自检结论含 Off、复制修复指令）
 
 ## 边界
 本模块负责: Cockpit 内容（桌面在线程上下文卡片、手机与窄窗格在横幅详情）、设置页的渲染与交互、对 bb 宿主界面的样式修饰

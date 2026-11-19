@@ -1,10 +1,11 @@
 /**
- * [INPUT]: 依赖宿主图标 (components/ui/icon) 与 lib/palette.ts 的色调
+ * [INPUT]: 依赖当前语言及 依赖宿主图标 (components/ui/icon) 与 lib/palette.ts 的色调
  * [OUTPUT]: 对外提供 SectionRow / SectionBody (分区展开内容统一缩进到名称线) / Collapse / CardRow (行体主操作 + 箭头菜单) / MenuItem / MenuConfirmItem / MoreRow / Meter / Hint / Dot / toneVar: 卡片与横幅详情共用的行式原语 (触屏下行高 36px、操作常显)
  * [POS]: components/cockpit 的展示原语层; 尺寸照抄 bb 原生卡片行 (26px 行高、12px 字、14px 灰色图标、右侧灰色等宽数字);
  *        消费者: 本目录各分区; 与 components/ui 的边界: ui 是脚手架通用组件, 本文件只服务卡片
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
+import { useText } from "./language";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
@@ -119,6 +120,7 @@ export function CardRow({
   expanded?: boolean;
   priority?: "label" | "trailing";
 }) {
+  const t = useText();
   const labelFirst = priority === "label";
   const body = (
     <>
@@ -157,7 +159,7 @@ export function CardRow({
             <button
               type="button"
               className={cn("flex w-6 shrink-0 items-center justify-center rounded-r-md text-muted-foreground hover:bg-state-hover hover:text-foreground focus-visible:bg-state-hover focus-visible:outline-none active:scale-100 data-[state=open]:bg-state-active data-[state=open]:text-foreground pointer-coarse:w-9", quietMenu && "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100")}
-              aria-label={menuLabel ?? "More actions"}
+              aria-label={menuLabel ?? t("moreActions")}
             >
               <Icon name="ChevronDown" className="size-3" aria-hidden />
             </button>
@@ -208,6 +210,7 @@ export function MenuConfirmItem({ icon, label, confirmLabel, onConfirm }: { icon
 
 /** "Show N more / Show less" 折叠行; 传 label 时作为固定标题的展开行 (如 "Token details") */
 export function MoreRow({ count = 0, label, open, onToggle }: { count?: number; label?: string; open: boolean; onToggle: () => void }) {
+  const t = useText();
   return (
     <CardRow
       leading={
@@ -217,7 +220,7 @@ export function MoreRow({ count = 0, label, open, onToggle }: { count?: number; 
           aria-hidden
         />
       }
-      label={label ?? (open ? "Show less" : `Show ${count} more`)}
+      label={label ?? (open ? t("showLess") : t("showMore", { count }))}
       muted
       expanded={open}
       onClick={onToggle}

@@ -1,180 +1,136 @@
-# Session Cockpit（会话驾驶舱）
+> **English** | [简体中文](README.zh-CN.md)
 
-往每个线程对话区**右上角**的线程上下文卡片里加几块分区：上下文窗口里装了什么、Prompt 缓存还热不热、agent 在工作区里起了哪些服务、本线程的 side chat 和常用脚本。
+# Session Cockpit
 
-## 设计逻辑
+See thread progress, context usage, and what’s running in your workspace from one card in [BB](https://getbb.app).
 
-Claude Desktop 和 T3 Code 的共同点：状态信息是对话视图自己的一部分。它们的做法是：
+<img src="docs/screenshots/session-cockpit.png" alt="BB Session Cockpit with an expanded progress briefing, a segmented context meter, two dev servers, and live context file counts" width="380">
 
-- 固定在对话区右上角，贴着对话流，滚动时不动，一眼可读，而不是要切过去的侧栏标签页。
-- 只有一列，从上到下堆分区，没有标签页。
-- 每个分区紧凑，细节就地展开（Claude 带虚线下划线的分类点开看明细，T3 每一项都是一行）。
-- 窗口窄时退化为从顶部按钮弹出。
+_Demo labels and paths in the live BB interface._
 
-bb 的**线程上下文卡片**正是这个位置：
+## What you can see
 
-- 宽窗口时卡片与对话流并排，中等宽度时把对话流挤开，可在标题栏按钮固定或取消固定。
-- 窄窗口时退回输入框上方的横幅，卡片从标题栏「Thread context」按钮弹出。
-- bb 自己的父线程、Changes、PR、Child threads 已经在卡片里，相当于 T3 的 git 区和 Lineage。
+| Group | At a glance |
+| --- | --- |
+| **Progress** | See the current stage and how many are done. Expand the row for the briefing and stage notes from the optional [Worktree Lineage](#related-bb-plugins) plugin. |
+| **Usage** | See how full the context window is, what’s using it, and when the prompt cache might expire. The **Session** row adds token totals, cache hits, working time, and cost when the provider reports it. |
+| **Workspace** | See which context files are loaded and which dev servers are running. Preview a file, open a server, run a project script, see loaded MCP connectors, or open a side chat. |
 
-本插件只往这张卡片里补一个「Session」分区，不另开面板。
+**Context files update as the agent works.** A readout like `3/316 loaded · ≈0.8%` shows the number of loaded files out of the scanned inventory and their estimated share of the entire context window. Expand a group to see the files, then click a file to preview it. The panel marks observed reads and distinguishes estimated sizes from provider-reported values.
 
-### 分组与一行一项
+**Context breakdowns work across providers.** Claude Code’s official snapshots keep their published values. For providers such as Codex and Antigravity that report a total only, the card shows an **Estimated breakdown** whose used categories add up to the reported total.
 
-卡片里的内容分三组，组名是灰色小标题，组间一条细线（参照 Synara 的线程信息面板）：
+**Same details on phones and narrow panes.** Open the session banner above the composer when the desktop card doesn’t fit. On desktop, optional interface polish smooths card transitions, keeps the prompt navigator accessible, and adjusts pointer behavior. **Choose details** in plugin settings controls which rows appear.
 
-- **Progress**：这条对话到哪了。
-- **Usage**：Context（上下文窗口）、Session（本会话的缓存、时长、成本与 token；账号级计划额度在 usage-rings 插件的侧边栏圆环里）。
-- **Workspace**：Servers、Scripts、Context files（上下文文件）、Connectors、Side chats。
+**Session Cockpit does not read or watch private local JSONL session logs.** Usage comes from BB’s APIs and events. File inventory and server discovery run on the workspace host.
 
-每一项默认只占一行：图标、名称、一个最要紧的读数、箭头。细节一律点开才看，默认全部收起，展开状态记在本机。
+<details>
+<summary>Context usage, estimates, and cache timing</summary>
 
-### Progress：这条对话到哪了
+- **Official snapshots.** The Context meter uses the provider’s used categories, free space, and any reported autocompact reserve. Observed file reads can appear alongside Claude Code’s Memory files with a `read` label and an estimated size. They do not change the official category values. Workspace percentages cover the scanned inventory and can differ from the official Memory files percentage.
+- **Messages.** The estimate uses up to 300 recent relevant BB events and stops at a compaction or clear. Accepted user input, completed assistant messages, tool arguments, and visible results use roughly one token per four UTF-8 bytes. Images use a placeholder of 256 tokens each. File attachments count by reference. Tool results attributed to context files are deducted from this category.
+- **Context files.** Codex starts with matching global and project-root `AGENTS.md` files, preferring `AGENTS.override.md` where available. Antigravity uses matching `GEMINI.md` files. The plugin adds matched successful reads from the current context, deduplicates paths, and estimates one token per four file bytes.
+- **Residual and free space.** System & tools (est.) is the reported usage left after assigning messages and files. That remainder can include earlier history, compacted summaries, and hidden instructions. If the estimates run over the budget, the plugin scales and rounds the child entries so used categories still sum to the reported usage. Free space is window size minus reported usage, floored at zero.
+- **Session and cache.** Session totals come from `thread/tokenUsage/updated`. The plugin normalizes providers that include or exclude cached input in their totals. Cache warmth uses the latest usage timestamp and the provider’s TTL. The elapsed working time covers up to roughly 250 recent turns.
+- **Compaction.** The card warns as usage reaches 80%. Compact requires two clicks within three seconds. The observed-read count resets when BB reports a compaction or clear.
 
-收起时一行：当前阶段的名称和完成数，如 `● 右上角 Session 信息栏  3/4`。点开是一句话概括和完整的阶段轨道（完成 / 进行中 / 已放弃，各带一句结论）。
+</details>
 
-内容来自另一个插件 `worktree-lineage` 写好并存盘的"全程速览"（每轮对话结束后由本机的小模型读整条对话的提要写出），本插件只读、从不触发生成，所以多显示这一处不多花额度。速览落后于对话时（比如这一轮还在跑），点开后末尾有一句“这一轮结束后更新”。没装那个插件时这一组不出现。
+<details>
+<summary>How the seven context file levels are scanned</summary>
 
-### Context 的分类从哪里来
+| Level | What the scan looks for |
+| --- | --- |
+| Global | `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.gemini/GEMINI.md`. |
+| Parent | Matching instruction files in up to 12 ancestor directories, stopping at the home directory when applicable. |
+| Project | Root `CLAUDE.md`, `AGENTS.md`, `AGENTS.override.md`, `GEMINI.md`, and `.claude/CLAUDE.md`. |
+| Modules | `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` in subdirectories. Git workspaces respect ignore rules. Other workspaces use a bounded directory walk. |
+| Local | `CLAUDE.local.md` in the workspace. |
+| Rules | Markdown files directly under `.claude/rules/` or `~/.claude/rules/`. |
+| Memory | Markdown files under the project’s Claude auto-memory directory or `.claude/memory/`. |
 
-有官方快照时，分段条、分类和条目直接使用 provider 的数据。Antigravity、Codex 等只上报总量时，面板底部显示 `Estimated breakdown`。总占用与窗口大小仍由 provider 决定，分类按以下口径估算。
+A green dot marks a loaded file. A small `M` marks workspace changes, including untracked files. A successful file-read event, a recognized read tool, or a simple single-file `cat` can record an observed read. The scan uses file metadata for modules and memory. Resolvable `@path` imports in Global, Parent, Project, Local, and Rules appear beneath their source file and stay out of the file count.
 
-| 分类 | 估算口径 |
-|---|---|
-| Messages | 从最新相关 BB 事件向前最多取 300 条，遇到压缩或清空即止。计已接受的用户输入、助手终态正文及可见的工具参数与结果。文本或参数每 4 个 UTF-8 字节约 1 token。图片每张暂按 256 token，文件附件只计引用。已归入 Context files 的读取结果从 Tool results 扣除。 |
-| Context files | Codex 的启动候选为全局和项目根的 AGENTS.md，同层扫描到 AGENTS.override.md 时优先采用。Antigravity 的启动候选为 GEMINI.md。再合并本窗口内成功读取的已扫描文件，按路径去重，大小按每 4 字节约 1 token。 |
-| System & tools (est.) | 总占用减去上述两项。这里也包含未取到的历史、压缩摘要、隐藏指令及估算误差。若估算超出总占用，消息与文件的子项同比例缩小，整数之和严格等于总占用。 |
-| Free space | 窗口减去总占用，最低为零。 |
+When more than eight files share a level, the inline list prioritizes the memory index, loaded files, and changed files. Use **All N · search** to filter the full list by path. The expanded Workspace item rechecks disk changes every 30 seconds while visible.
 
-估算在查询会话快照时运行，只读取 BB SDK 与现有 Context files 扫描结果。插件不读取或监听本地会话 JSONL。
+</details>
 
-### Context files：哪些文件在给 agent 定规矩
+<details>
+<summary>Dev servers, scripts, and other workspace tools</summary>
 
-上下文文件是写给 agent 看、固定它在某个范围内行为的说明文件（CLAUDE.md、AGENTS.md 这一类）。这一项把磁盘上的全部上下文文件按层级列出来，一个文件只属于一个层级：
+On macOS and Linux, the workspace host uses `lsof -iTCP -sTCP:LISTEN` to discover listeners and checks process working directories and ancestry. It distinguishes agent CLI ports, agent child processes, BB terminal processes, Docker Compose services, and other processes. Inherited `BB_THREAD_ID` values let it distinguish agent-owned services across threads in one workspace. Terminal and Compose services are workspace-scoped. Discovery draws on Hotspot and Worktree Ports, both MIT-licensed.
 
-| 层级 | 是什么 |
-|---|---|
-| Global | 用户目录下对所有项目生效的：`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.gemini/GEMINI.md` |
-| Parent | 工作区之上各层目录里的 CLAUDE.md / CLAUDE.local.md / AGENTS.md / AGENTS.override.md / GEMINI.md（最多向上 12 层，到用户目录为止） |
-| Project | 工作区根目录里的同名文件，加上 `.claude/CLAUDE.md` |
-| Modules | 工作区子目录里的 CLAUDE.md / AGENTS.md / GEMINI.md，一个目录一份。遵守 .gitignore（git 仓库里用 `git ls-files`，不进 node_modules）；不是仓库时做有界的目录遍历 |
-| Local | CLAUDE.local.md：只在本机生效、不随仓库共享 |
-| Rules | `.claude/rules/` 与 `~/.claude/rules/` 下直接放着的 `*.md` |
-| Memory | agent 自己写下的自动记忆：`~/.claude/projects/<工作区路径换成横线>/memory/` 与 `.claude/memory/` 下的 `*.md` |
+Agent CLI ports are excluded from HTTP probing and stop actions. Current-thread and workspace services appear first, with agent and other-thread ports grouped separately. Click an HTTP service to open it. **Stop** requires confirmation and a fresh ownership check to guard against PID reuse. Server discovery refreshes every 30 seconds while the row is open and visible. A short scan cache and a 60-second HTTP probe cache reduce repeated work.
 
-没有文件的层级不显示；一个上下文文件都没有时，这一项不出现。
+Give a port a human-readable name with `.bb/ports.json`:
 
-收起时显示 `4/80 loaded · ≈1.2%`。分母是宿主扫描到的文件数，百分比使用整个上下文窗口作分母。绿点与 token 数同列，可悬停辨认来源。橙色 `M` 表示工作区内有未提交改动。
+```json
+{"ports":[{"port":5173,"label":"Web","scheme":"http"}]}
+```
 
-- Claude Code 的 Usage 分段、分类 token 与百分比沿用官方快照。Memory files 行可展开查看官方条目及额外的观测读取，后者标为 `read` 并显示估算大小。Workspace 的占比汇总扫描清单内的官方文件及观测读取，因范围不同可能与 Usage 的官方占比不同。
-- 只报总量时，Usage 与 Workspace 共用缩放后的文件 token 数。本窗口内的读取按 BB 完结事件刷新，压缩或清空后重计。读取识别依赖 BB 提供的文件读取事件、已知读取工具或成功的简单单文件 `cat`。文件清单及大小使用宿主扫描缓存，展开 Workspace 项时每 30 秒检查磁盘变化。模块与自动记忆只读取元数据。
+Project scripts run in the thread’s terminal. An optional preview URL opens after launch. Connectors reflect MCP tools reported in the context breakdown. Side chats open in a split pane and can be renamed from their row menu.
 
-被别的上下文文件用 `@路径` 引进来的文件（导入）紧贴在引它的文件下面、缩进一格、前面带 `↳`，不单独算一个层级，也不计入个数。只在 Global / Parent / Project / Local / Rules 的文件里找导入，且只有解析到真实存在的文件才算（`@get-bb/plugin-sdk` 这类包名不算）。
+</details>
 
-展示分三层：收起时一行（如 `3/80 loaded · ≈1.2%`）→ 点开是每个层级一行（个数、已加载数、有没有改动）→ 再点开一个层级看它的文件。点文件在 bb 右侧的文件面板里预览；行尾菜单里可以用外部编辑器单独打开，或复制路径。
+<details>
+<summary>Interface details and theme compatibility</summary>
 
-模块往往有几十上百个，不会全摊开：一个层级超过 8 个文件时，就地只列已加载的和有改动的（自动记忆的 MEMORY.md 总在最前），其余点 `All N · search` 进弹层看。弹层里模块按顶层目录分组（`apps 28`、`packages 16`……按个数从多到少，只有一两个文件的目录并进 `other`），可按路径过滤，点一项即预览并关闭弹层。
+Rows start collapsed and remember their open state in the browser. Long lists show a short inline preview and a searchable dialog. On touch screens, tap targets are 36 px tall and dialogs open as bottom sheets. Desktop card motion gives the transcript room, keeps the card in place when switching threads, and raises its height limit from 576 px to 864 px. The card scrolls internally when it fills up.
 
-### 三层渐进与手机
+Some BB themes scale buttons on press. Cockpit rows use `active:scale-100` and a background change for stable press feedback. Desktop pointer polish preserves the text-selection cursor in the transcript and the hand cursor on links. The plugin respects reduced-motion preferences. Both polish options can be disabled independently. Settings show the results of the built-in checks for host UI changes after BB upgrades.
 
-卡片高度有上限（bb 默认 576px，本插件的界面修饰把它提到 864px），所以内容分三层展示，桌面和手机共用同一套。层级用缩进表示：分区行是图标加粗体名称，展开的内容整体缩进到名称那条线上，图标只在最左一列；读数行名称灰、数值黑；Token 明细默认收成一行。
+</details>
 
-1. **摘要**：每个分区一行（如 `Context 7% · 73k/1M`、`Usage Weekly 87% · cache cold`）。
-2. **就地展开**：点一行展开该分区，各分区独立展开，可同时展开多个；超出卡片高度时在卡片内滚动。默认全部收起，之后记住上次的选择（存在本机）。
-3. **弹层**：技能、MCP 工具这类长列表就地只列前 8 项，更多时点「All N · search」进弹层（桌面居中，手机是底部抽屉），可过滤。
-
-手机上 bb 不显示线程上下文卡片，入口是输入框上方横幅里的摘要（如 `Cache 42m · Weekly 2%`）：点它在横幅下方展开同一套内容（限高半屏、内部滚动）。触屏下行高 36px，行尾箭头按钮 36px，菜单变成底部抽屉。窄的桌面窗格（比如右侧开着预览或终端时）同样走横幅。
-
-下表的「分区」对应第二层展开后的内容。
-
-| 分区 | 借鉴来源 | 内容 |
-|---|---|---|
-| Context | Claude Desktop · Context | 摘要是占用百分比和 token 数，点开后是分段占用条、分类 token 与占比、Autocompact buffer / Free space、按需加载的工具单列。带数字和箭头的分类可就地展开到每个记忆文件、技能、MCP 工具，记忆文件点开在 bb 预览里查看。占用到 80% 时出现提示。底部是测量时间和两步确认的 Compact |
-| Usage | Ghostex · Limits | Prompt 缓存（使用中 / 热及倒计时 / 冷，变冷后提示下一条消息要重读多少 token，快过期且上下文较大时提示先压缩）、agent 工作时长与回合数、成本（provider 报了才显示）、Token 明细（命中率与读写量） |
-| Servers | T3 Code · Servers | 只列工作区内的监听。本线程自己的服务在前（agent 或 bb 终端起的、工作区 docker compose 容器）；agent 会话自己的端口和其他线程起的服务折叠在「N from agents & other threads」里，其他线程的标「Other thread」。行体点击打开网页（非 HTTP 端口不可点），箭头菜单里有打开、复制地址、停止（两步确认） |
-| Scripts | T3 Code · Project scripts | 每个项目一组常用命令。行体点击即在线程终端里运行（先开 shell 再键入，跑完输出保留）；可填预览地址，运行约 2 秒后自动打开。箭头菜单里有运行、打开预览、复制命令、编辑、删除（两步确认） |
-| Connectors | Claude Desktop · Connectors | 从上下文里的 MCP 工具条目反推本会话加载了哪些 server，绿点表示工具已加载，灰点表示按需加载；全部列出 |
-| Side chats | T3 Code · Side chats | bb 内置 side-chat 插件创建的隐藏 fork，行体点击在分屏打开，箭头菜单可改名；没有时整块不显示 |
-
-「Choose details」（显示哪些分区）放在插件设置页，不占卡片高度。
-
-### 界面修饰（Interface polish）
-
-除了卡片里的分区，插件还用内容脚本对 bb 自己的界面做了几处修改，在所有主题下生效，设置页可分别关闭：
-
-- **卡片动效**：卡片滑入淡出，对话区平滑让位，历史提问导航条移到卡片左侧、不被卡片挤掉；卡片最高从 576px 提到 864px；在会话之间切换时卡片留在原位只换内容（不重播滑入，先保持上一张的高度，再平滑收到新内容的高度）。
-- **桌面光标**：按钮、标签页、列表行用箭头光标（macOS 原生习惯），只有正文链接、外链和带下划线的文字链接是手形；消息正文保留文字光标，可以直接选字。
-
-这些规则依赖 bb 未承诺稳定的页面结构，所以自带七项自检（结构是否还在、光标是否生效、正文是否仍是文字光标）。bb 升级导致失效时会弹提醒，设置页显示哪一项失效，并提供「Copy fix prompt」：把复制的指令发给任意 bb 线程，agent 就能照着修。
-
-## 交互约定
-
-- **尺寸**：照抄 bb 原生卡片行，行高 26px、正文 12px、图标 14px、右侧灰色等宽数字。分类明细行 24px，与 Claude Desktop 一样更紧凑。
-- **按下反馈**：整行按钮不做缩放，改为背景加深。你的 bb Glass 主题给所有按钮加了 `active` 时 `scale: 0.96`，288px 宽的行会缩进约 11px，观感过猛。主题把这条规则放在 `@layer components`，所以这里用工具类 `active:scale-100` 就能覆盖，不改主题。bb 原生行（如 Changes）仍会缩放，这是主题本身的行为。
-- **一行两个点击区**（T3 Code 的做法）：行体执行主操作（Server 打开、Script 运行、Side chat 分屏打开），右侧独立的箭头按钮展开菜单放次要操作。两个区各有自己的悬停底色。没有操作的纯信息行没有悬停底色。
-- **放不下时谁让位**：一般行右侧数值完整、名称截断；Server 行反过来，地址完整、归属说明截断，完整信息在悬停提示里。
-- **危险操作两步确认**：菜单里的停止服务、删除脚本，第一次选中菜单不关、文案变成红色「Confirm stop / Confirm remove」，再选一次才执行，菜单宽度不变；Compact 按钮第一次点击变红色「Confirm」，3 秒内再点才执行，按钮宽度不变。
-- **动效**：展开收起 200ms、淡入淡出 160ms、ease-out，系统开启「减少动态效果」时关闭。
-
-## 数据来源与口径
-
-- **上下文**：`bb.sdk.threads.context()`。优先采用 provider 的官方分类，只有总量时的估算范围见上文「Context 的分类从哪里来」。
-- **Token 与缓存**：线程事件 `thread/tokenUsage/updated`。各家 `inputTokens` 口径不同（Claude 不含缓存，Codex 含缓存），按 `totalTokens` 满足哪条恒等式自动归一。Claude 的 `last` 是上一回合的合计，标为 "Last turn"。
-- **缓存冷热**：推算值，即最后一次用量上报时间 + provider 声明的 TTL。回合进行中视为使用中。Codex 不报 TTL，显示 Not reported。
-- **工作时长**：回合开始 / 结束事件，最多统计最近约 250 个回合。
-- **计划额度**：已移到 usage-rings 插件（侧边栏 rail 圆环），本插件不再读取，避免两处各算一份。
-- **Servers**：宿主入口在线程所在机器执行 `lsof -iTCP -sTCP:LISTEN`，只保留进程工作目录在工作区内的监听，按进程树判定归属：
-  - **agent**：进程本身是 agent CLI（会话自己的 IDE / MCP 端口），不可停止
-  - **agent-child**：由 agent 启动，可停止
-  - **terminal**：在 bb 终端里启动，可停止
-  - **docker**：工作区里 docker compose 项目发布的端口（按 compose 的工作目录标签归属），可停止（`docker stop`）
-  - **other**：其他常驻进程，来路不明，不可停止
-
-  **线程归属**：bb 给它启动的 agent 导出 `BB_THREAD_ID`，子进程继承，所以 agent 起的服务能认出是哪个线程起的；共用一个工作区的多个线程由此区分。bb 终端和 docker 容器读不到线程，算作工作区里每个线程自己的。思路来自 Hotspot 插件（MIT）。
-
-  **端口命名**：工作区的 `.bb/ports.json`（`{"ports":[{"port":5173,"label":"Web","scheme":"http"}]}`）可以给端口起名，行上显示为 `Web :5173`。docker 识别和端口命名的思路来自 Worktree Ports 插件（MIT）。
-
-  停止前宿主端会重新扫描、重新判定，防止 pid 复用误杀。收起时只在挂载时扫一次，展开后每 30 秒重扫（页面不可见时不扫）；宿主端同一工作区 5 秒内去重，HTTP 探测按 pid:端口缓存 60 秒，agent 端口不探测。
-- **Side chats**：`threads.list({ sourceThreadId, originPluginId: "side-chat", includeHidden })`，改名用 `threads.update`。
-
-## 前置条件
-
-线程上下文卡片目前是 bb 的实验功能，需要打开，并让卡片保持固定：
+## Install
 
 ```sh
-bb settings experiment threadContextCard true    # 关闭: ... false
+git clone https://github.com/waiclay-349687/bb-plugin-session-cockpit.git
+cd bb-plugin-session-cockpit
+npm install --include=dev
+bb plugin build .
+bb plugin install "path:$PWD" --yes
+```
+
+Use BB 0.49 or newer and Node.js 22 or newer. Enable and pin BB’s experimental **Thread context card** for the desktop layout:
+
+```sh
+bb settings experiment threadContextCard true
 bb settings ui set threadContextCard.pinned true
 ```
 
-关闭实验后卡片分区不显示，只剩横幅里的摘要。
+The session banner is available on phones and narrow panes. Install [Worktree Lineage](#related-bb-plugins) for the optional Progress briefing.
 
-## Agent 命令
+### Language
+
+Choose **Language** in the plugin settings. `auto` follows BB’s interface language, then the browser when BB has no language set. Chinese locales use Simplified Chinese. Choose `en` for English or `zh` for Simplified Chinese. Changes apply to open cockpit panels immediately. When a saved briefing uses a different language, the panel shows localized stage numbers and statuses.
+
+```sh
+bb plugin config session-cockpit set language zh
+```
+
+## Agent CLI
 
 ```sh
 bb session-cockpit summary [--thread <id>] [--json]
 bb session-cockpit servers [--thread <id>] [--json]
 ```
 
-线程内省略 `--thread` 即指当前线程。用法说明见 `skills/session-cockpit/SKILL.md`（bb 会自动注入给 agent）。
+Inside a BB thread, omit `--thread` to use the current thread. The CLI skill describes the output. [Agent CLI reference](skills/session-cockpit/SKILL.md)
 
-## 开发
+## Develop
 
 ```sh
-npm install
-npm run check          # tsc + 单测 + bb plugin build
-bb plugin install .    # 首次安装（路径安装，直接从本目录运行）
+npm run check
 bb plugin reload session-cockpit
 ```
 
-`bb plugin reload` 只换后端；已经打开的 bb 窗口要刷新（⌘R）才会加载新的前端包。
+The check runs TypeScript, the Node.js test suite, and the plugin build. After reloading, press **⌘R** in an open BB window to load the new frontend bundle.
 
-单测用 Node 自带测试器跑 `test/*.test.ts`，样本取自真实线程并已脱敏（`test/fixtures/` 只保留用量类事件）。界面验证步骤见 `docs/HANDOFF.md`。
+## Related BB Plugins
 
-## 同系列 BB 插件
-
-- [bb-plugin-worktree-lineage](https://github.com/waiclay-349687/bb-plugin-worktree-lineage)：左侧线程列表，按对话 / 分支树双视图展示，带软收起（Settled）、待办快跳、悬停全程速览与丝滑动效（本插件的 Progress 分区读取其速览数据）
-- [bb-plugin-session-cockpit](https://github.com/waiclay-349687/bb-plugin-session-cockpit)（本插件）：右上角会话驾驶舱，按 Progress / Usage / Workspace 分组展示阶段进度、上下文明细、缓存与本地服务
-- [bb-plugin-usage-rings](https://github.com/waiclay-349687/bb-plugin-usage-rings)：左下角侧边栏额度圆环，统一展示各家 Agent 计划用量与配速（含 Antigravity）
+- **bb-plugin-worktree-lineage** — Worktree & branch-lineage sidebar thread list with smooth motion, Settled shelf, attention-jump shortcuts, and hover briefings. [Repository](https://github.com/waiclay-349687/bb-plugin-worktree-lineage)
+- **bb-plugin-session-cockpit** (this plugin) — Progress, context usage, and workspace tools in the thread card. [Repository](https://github.com/waiclay-349687/bb-plugin-session-cockpit)
+- **bb-plugin-usage-rings** — Bottom-left sidebar usage rings with pace tracking across providers including Antigravity. [Repository](https://github.com/waiclay-349687/bb-plugin-usage-rings)
 
 ## License
 

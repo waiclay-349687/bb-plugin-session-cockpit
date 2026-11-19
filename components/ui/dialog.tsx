@@ -228,6 +228,7 @@ type DialogContentProps = React.ComponentPropsWithoutRef<
 > & {
   onAfterCloseAutoFocus?: () => void;
   hideCloseButton?: boolean;
+  closeLabel?: string;
   compactContentClassName?: string;
 };
 
@@ -237,6 +238,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       className,
       children,
       hideCloseButton = false,
+      closeLabel = "Close",
       compactContentClassName,
       onAfterCloseAutoFocus,
       onCloseAutoFocus,
@@ -306,7 +308,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           {hideCloseButton ? null : (
             <DialogPrimitive.Close className="absolute right-4 top-4 cursor-pointer rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-state-active data-[state=open]:text-foreground">
               <Icon name="X" className="h-4 w-4" />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{closeLabel}</span>
             </DialogPrimitive.Close>
           )}
         </DialogPrimitive.Content>

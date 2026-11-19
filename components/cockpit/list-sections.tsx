@@ -1,10 +1,11 @@
 /**
- * [INPUT]: 依赖 data.ts (useSession/useServers/useScripts/useSideChats/useNow)、rpc.ts 契约、宿主 useSdk (terminals)、useBbNavigate、copyToClipboard
+ * [INPUT]: 依赖双语的服务归属、命令操作及 依赖 data.ts (useSession/useServers/useScripts/useSideChats/useNow)、rpc.ts 契约、宿主 useSdk (terminals)、useBbNavigate、copyToClipboard
  * [OUTPUT]: 对外提供 ConnectorsSection / ServersSection / ScriptsSection / SideChatsSection: 列表型分区 (一行摘要 → 就地展开为列表)
  * [POS]: components/cockpit 的列表分区, 对应 Claude Desktop 的 Connectors 与 T3 Code 的 Servers / Project scripts / Side chats;
  *        消费者: cockpit.tsx; 与 context-section.tsx 的边界: 连接器只到 server 级, 工具明细在上下文分类里展开
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
+import { useTranslation, useText, notifyCockpit } from "./language";
 import { useState } from "react";
 import {
   experimental_copyToClipboard as copyToClipboard,
@@ -12,11 +13,10 @@ import {
   useRpc,
   useSdk,
 } from "@get-bb/plugin-sdk/app";
-import { toast } from "sonner";
+import { matchingProse, type Text } from "../../lib/i18n";
 import { Input } from "@/components/ui/input";
 import type { ListenerInfo } from "../../contract";
 import type { ProjectScript, rpcContract } from "../../rpc";
-import { formatAgo, formatTokens } from "../../lib/format";
 import { useNow, useScripts, useServers, useSession, useSideChats } from "./data";
 import type { SectionProps } from "./cockpit";
 import { CardRow, Dot, MenuConfirmItem, MenuItem, MoreRow, SectionBody, SectionRow } from "./rows";
@@ -33,6 +33,7 @@ const DotSlot = ({ color, label }: { color: string; label: string }) => (
 // ---------------------------------------------------------------------------
 
 export function ConnectorsSection({ threadId, open, onToggle }: SectionProps) {
+  const { t, formatTokens } = useTranslation();
   const connectors = useSession(threadId).data?.connectors ?? [];
   if (connectors.length === 0) return null;
   const loaded = connectors.filter((c) => c.loadedTools > 0).length;
@@ -40,10 +41,10 @@ export function ConnectorsSection({ threadId, open, onToggle }: SectionProps) {
     <div>
       <SectionRow
         icon="Plug02"
-        label="Connectors"
+        label={t("connectors")}
         open={open}
         onToggle={onToggle}
-        summary={loaded > 0 ? `${connectors.length} · ${loaded} loaded` : String(connectors.length)}
+        summary={loaded > 0 ? `${connectors.length} · ${t("loaded", { count: loaded })}` : String(connectors.length)}
       />
       <SectionBody open={open}>
         {connectors.map((c) => (
@@ -52,12 +53,12 @@ export function ConnectorsSection({ threadId, open, onToggle }: SectionProps) {
               leading={
                 <DotSlot
                   color={c.loadedTools > 0 ? "var(--success)" : "var(--muted-foreground)"}
-                  label={c.loadedTools > 0 ? "Tools loaded" : "Tools load on demand"}
+                  label={c.loadedTools > 0 ? t("toolsLoaded") : t("toolsOnDemand")}
                 />
               }
               label={c.name}
-              title={`${c.loadedTools} loaded, ${c.deferredTools} on demand · ${formatTokens(c.tokens)} tokens. Read from this session's context; servers that failed to connect don't appear.`}
-              trailing={c.loadedTools > 0 ? `${c.loadedTools} loaded` : `${c.deferredTools} on demand`}
+              title={t("connectorHelp", { activeCount: t("loaded", { count: c.loadedTools }), deferredCount: t("onDemandCount", { count: c.deferredTools }), size: t("tokens", { count: formatTokens(c.tokens) }) })}
+              trailing={c.loadedTools > 0 ? t("loaded", { count: c.loadedTools }) : t("onDemandCount", { count: c.deferredTools })}
             />
           ))}
         </SectionBody>
@@ -70,6 +71,7 @@ export function ConnectorsSection({ threadId, open, onToggle }: SectionProps) {
 // ---------------------------------------------------------------------------
 
 export function ServersSection({ threadId, open, onToggle }: SectionProps) {
+  const t = useText();
   // 收起时只在挂载时扫一次 (给摘要一个数), 展开后才定期重扫
   const result = useServers(threadId, open).data;
   const [showOther, setShowOther] = useState(false);
@@ -81,10 +83,10 @@ export function ServersSection({ threadId, open, onToggle }: SectionProps) {
     <div>
       <SectionRow
         icon="Globe"
-        label="Servers"
+        label={t("servers")}
         open={open}
         onToggle={onToggle}
-        summary={mine.length > 0 ? `${mine.length} running` : `${other.length} other port${other.length === 1 ? "" : "s"}`}
+        summary={mine.length > 0 ? t("runningCount", { count: mine.length }) : t(other.length === 1 ? "otherPort" : "otherPorts", { count: other.length })}
       />
       <SectionBody open={open}>
         <>
@@ -93,7 +95,7 @@ export function ServersSection({ threadId, open, onToggle }: SectionProps) {
           ))}
           {mine.length > 0 && other.length > 0 ? (
             <MoreRow
-              label={showOther ? "Hide other ports" : `${other.length} from agents & other threads`}
+              label={showOther ? t("hidePorts") : t("otherThreadsPorts", { count: other.length })}
               open={showOther}
               onToggle={() => setShowOther(!showOther)}
             />
@@ -106,15 +108,15 @@ export function ServersSection({ threadId, open, onToggle }: SectionProps) {
 }
 
 /** T3 式归属文案: "Agent · node" / "Terminal · python3" / "claude session" */
-function ownerText(server: ListenerInfo, threadId: string): string {
-  const elsewhere = server.threadId !== null && server.threadId !== threadId ? "Other thread · " : "";
+function ownerText(t: Text, server: ListenerInfo, threadId: string): string {
+  const elsewhere = server.threadId !== null && server.threadId !== threadId ? `${t("otherThread")} · ` : "";
   switch (server.owner) {
     case "agent":
-      return elsewhere + `${server.ownerAgent ?? "agent"} session`;
+      return elsewhere + t("agentSession", { name: server.ownerAgent ?? t("agent") });
     case "agent-child":
-      return elsewhere + `Agent · ${server.label}`;
+      return elsewhere + `${t("agent")} · ${server.label}`;
     case "terminal":
-      return elsewhere + `Terminal · ${server.label}`;
+      return elsewhere + `${t("terminal")} · ${server.label}`;
     case "docker":
       return elsewhere + `Docker · ${server.label}`;
     default:
@@ -123,6 +125,7 @@ function ownerText(server: ListenerInfo, threadId: string): string {
 }
 
 function ServerRow({ threadId, server }: { threadId: string; server: ListenerInfo }) {
+  const t = useText();
   const navigate = useBbNavigate();
   const rpc = useRpc<typeof rpcContract>();
   const host = server.url.replace(/^https?:\/\//, "");
@@ -136,31 +139,31 @@ function ServerRow({ threadId, server }: { threadId: string; server: ListenerInf
       label={server.name ? `${server.name} :${server.port}` : host}
       title={[
         server.name ? `${server.name} · ${host}` : host,
-        ownerText(server, threadId),
-        server.container ? `container ${server.container}` : `pid ${server.pid}`,
+        ownerText(t, server, threadId),
+        server.container ? t("container", { name: server.container }) : t("process", { pid: server.pid }),
         server.cwd,
       ]
         .filter(Boolean)
         .join(" · ")}
-      trailing={ownerText(server, threadId)}
+      trailing={ownerText(t, server, threadId)}
       onClick={openable ? open : undefined}
-      menuLabel={`Actions for ${host}`}
+      menuLabel={t("actionsFor", { name: host })}
       menu={
         <>
-          {openable ? <MenuItem icon="ExternalLink" label="Open" onSelect={open} /> : null}
-          <MenuItem icon="Copy" label="Copy URL" onSelect={() => void copyToClipboard({ text: server.url }).then((ok) => ok && toast.success("Copied"))} />
+          {openable ? <MenuItem icon="ExternalLink" label={t("open")} onSelect={open} /> : null}
+          <MenuItem icon="Copy" label={t("copyUrl")} onSelect={() => void copyToClipboard({ text: server.url }).then((ok) => ok && notifyCockpit("success", "copied"))} />
           {server.stoppable ? (
             <MenuConfirmItem
               icon="Square"
-              label={`Stop ${server.label}`}
+              label={t("stop", { name: server.label })}
               // 确认文案不长于原文案, 菜单宽度不跳; 触屏上也成立 (不写 "Click")
-              confirmLabel="Confirm stop"
+              confirmLabel={t("confirmStop")}
               onConfirm={async () => {
                 try {
                   const result = await rpc.call("stopServer", { threadId, pid: server.pid, port: server.port });
-                  (result.stopped ? toast.success : toast.error)(result.message);
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Could not stop the server");
+                  notifyCockpit(result.stopped ? "success" : "error", result.stopped ? "stopped" : "stopFailed");
+                } catch {
+                  notifyCockpit("error", "stopFailed");
                 }
               }}
             />
@@ -176,12 +179,13 @@ function ServerRow({ threadId, server }: { threadId: string; server: ListenerInf
 // ---------------------------------------------------------------------------
 
 export function ScriptsSection({ threadId, projectId, open, onToggle }: SectionProps) {
+  const t = useText();
   const query = useScripts(projectId);
   const [editing, setEditing] = useState<ProjectScript | "new" | null>(null);
   const scripts = query.data?.scripts ?? [];
   return (
     <div>
-      <SectionRow icon="Terminal" label="Scripts" open={open} onToggle={onToggle} summary={scripts.length > 0 ? String(scripts.length) : "Add"} />
+      <SectionRow icon="Terminal" label={t("scripts")} open={open} onToggle={onToggle} summary={scripts.length > 0 ? String(scripts.length) : t("add")} />
       <SectionBody open={open}>
         <>
           {scripts.map((script) =>
@@ -194,7 +198,7 @@ export function ScriptsSection({ threadId, projectId, open, onToggle }: SectionP
           {editing === "new" ? (
             <ScriptForm projectId={projectId} script={null} onDone={() => setEditing(null)} />
           ) : (
-            <CardRow icon="Plus" label="Add project script" muted onClick={() => setEditing("new")} />
+            <CardRow icon="Plus" label={t("addScript")} muted onClick={() => setEditing("new")} />
           )}
         </>
       </SectionBody>
@@ -206,11 +210,13 @@ export function ScriptsSection({ threadId, projectId, open, onToggle }: SectionP
 const PREVIEW_DELAY_MS = 2000;
 
 function ScriptRow({ threadId, projectId, script, onEdit }: { threadId: string; projectId: string; script: ProjectScript; onEdit: () => void }) {
+  const { t, language } = useTranslation();
   const sdk = useSdk();
   const navigate = useBbNavigate();
   const rpc = useRpc<typeof rpcContract>();
   const [running, setRunning] = useState(false);
   const previewUrl = script.previewUrl;
+  const name = language === "en" && /\p{Script=Han}/u.test(script.name) ? t("scriptName") : script.name;
   const run = async () => {
     if (running) return;
     setRunning(true);
@@ -225,10 +231,10 @@ function ScriptRow({ threadId, projectId, script, onEdit }: { threadId: string; 
       });
       await sdk.terminals.input({ terminalId: terminal.id, dataBase64: toBase64(`${script.command}\r`) });
       const shown = await navigate.experimental_openTerminal({ terminalId: terminal.id });
-      if (!shown) toast.success(`Started "${script.name}" in a terminal`);
+      if (!shown) notifyCockpit("success", "started", { name });
       if (previewUrl) setTimeout(() => navigate.openUrl(previewUrl), PREVIEW_DELAY_MS);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start the script");
+    } catch {
+      notifyCockpit("error", "startFailed");
     } finally {
       setRunning(false);
     }
@@ -236,22 +242,22 @@ function ScriptRow({ threadId, projectId, script, onEdit }: { threadId: string; 
   return (
     <CardRow
       icon="Play"
-      label={script.name}
-      title={`Run: ${script.command}${previewUrl ? `, then open ${previewUrl}` : ""}`}
+      label={name}
+      title={previewUrl ? t("scriptRunPreview", { command: script.command, url: previewUrl }) : t("scriptRun", { command: script.command })}
       trailing={previewUrl ? previewUrl.replace(/^https?:\/\//, "").replace(/\/$/, "") : undefined}
       onClick={() => void run()}
-      menuLabel={`Actions for ${script.name}`}
+      menuLabel={t("actionsFor", { name })}
       menu={
         <>
-          <MenuItem icon="Play" label="Run" onSelect={() => void run()} />
-          {previewUrl ? <MenuItem icon="ExternalLink" label="Open preview" onSelect={() => navigate.openUrl(previewUrl)} /> : null}
-          <MenuItem icon="Copy" label="Copy command" onSelect={() => void copyToClipboard({ text: script.command }).then((ok) => ok && toast.success("Copied"))} />
-          <MenuItem icon="Edit" label="Edit" onSelect={onEdit} />
+          <MenuItem icon="Play" label={t("run")} onSelect={() => void run()} />
+          {previewUrl ? <MenuItem icon="ExternalLink" label={t("openPreview")} onSelect={() => navigate.openUrl(previewUrl)} /> : null}
+          <MenuItem icon="Copy" label={t("copyCommand")} onSelect={() => void copyToClipboard({ text: script.command }).then((ok) => ok && notifyCockpit("success", "copied"))} />
+          <MenuItem icon="Edit" label={t("edit")} onSelect={onEdit} />
           <MenuConfirmItem
             icon="Trash2"
-            label="Remove"
-            confirmLabel="Confirm remove"
-            onConfirm={() => rpc.call("removeScript", { projectId, id: script.id }).then(() => undefined, (e: unknown) => void toast.error(String(e)))}
+            label={t("remove")}
+            confirmLabel={t("confirmRemove")}
+            onConfirm={() => rpc.call("removeScript", { projectId, id: script.id }).then(() => undefined, () => void notifyCockpit("error", "removeFailed"))}
           />
         </>
       }
@@ -267,6 +273,7 @@ function toBase64(text: string): string {
 }
 
 function ScriptForm({ projectId, script, onDone }: { projectId: string; script: ProjectScript | null; onDone: () => void }) {
+  const t = useText();
   const rpc = useRpc<typeof rpcContract>();
   const [name, setName] = useState(script?.name ?? "");
   const [command, setCommand] = useState(script?.command ?? "");
@@ -282,8 +289,8 @@ function ScriptForm({ projectId, script, onDone }: { projectId: string; script: 
     try {
       await rpc.call("saveScript", { projectId, ...(script ? { id: script.id } : {}), name: name.trim(), command: command.trim(), previewUrl: preview === "" ? null : preview });
       onDone();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save the script");
+    } catch {
+      notifyCockpit("error", "saveFailed");
     } finally {
       setSaving(false);
     }
@@ -294,27 +301,27 @@ function ScriptForm({ projectId, script, onDone }: { projectId: string; script: 
       onKeyDown={(e) => e.key === "Escape" && onDone()}
       className="space-y-1 rounded-md bg-state-hover p-1.5"
     >
-      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name · Dev server" aria-label="Script name" className="h-7 px-2 text-xs" autoFocus />
-      <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="Command · npm run dev" aria-label="Command" className="h-7 px-2 font-mono text-[11px]" />
+      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("scriptNameExample")} aria-label={t("scriptName")} className="h-7 px-2 text-xs" autoFocus />
+      <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t("commandExample")} aria-label={t("command")} className="h-7 px-2 font-mono text-[11px]" />
       <Input
         value={previewUrl}
         onChange={(e) => setPreviewUrl(e.target.value)}
-        placeholder="Preview URL (optional) · http://localhost:5173"
-        aria-label="Preview URL"
+        placeholder={t("previewExample")}
+        aria-label={t("previewUrl")}
         aria-invalid={!previewOk}
         className="h-7 px-2 font-mono text-[11px]"
       />
       <div className="flex items-center justify-end gap-1 pt-0.5">
-        <span className="mr-auto pl-0.5 text-[11px] text-muted-foreground">Enter to save · Esc to cancel</span>
+        <span className="mr-auto pl-0.5 text-[11px] text-muted-foreground">{t("keyboardSave")}</span>
         <button type="button" className="h-6 rounded px-2 text-[11px] text-muted-foreground hover:bg-state-hover hover:text-foreground" onClick={onDone}>
-          Cancel
+          {t("cancel")}
         </button>
         <button
           type="submit"
           className="h-6 rounded bg-foreground px-2 text-[11px] text-background hover:bg-foreground/90 disabled:opacity-40"
           disabled={!valid || saving}
         >
-          {script ? "Save" : "Add"}
+          {saving ? t("saving") : t(script ? "save" : "add")}
         </button>
       </div>
     </form>
@@ -326,6 +333,7 @@ function ScriptForm({ projectId, script, onDone }: { projectId: string; script: 
 // ---------------------------------------------------------------------------
 
 export function SideChatsSection({ threadId, open, onToggle }: SectionProps) {
+  const { t, language, formatAgo } = useTranslation();
   const query = useSideChats(threadId);
   const chats = query.data?.chats ?? [];
   const navigate = useBbNavigate();
@@ -342,18 +350,18 @@ export function SideChatsSection({ threadId, open, onToggle }: SectionProps) {
     try {
       await sdk.threads.update({ threadId: id, title: next });
       await query.refetch();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not rename the side chat");
+    } catch {
+      notifyCockpit("error", "renameFailed");
     }
   };
   return (
     <div>
       <SectionRow
         icon="SideChat"
-        label="Side chats"
+        label={t("sideChats")}
         open={open}
         onToggle={onToggle}
-        summary={working > 0 ? `${chats.length} · ${working} working` : String(chats.length)}
+        summary={working > 0 ? `${chats.length} · ${t("runningCount", { count: working })}` : String(chats.length)}
       />
       <SectionBody open={open}>
         {chats.map((chat) => {
@@ -370,7 +378,7 @@ export function SideChatsSection({ threadId, open, onToggle }: SectionProps) {
                 }}
                 onKeyDown={(e) => e.key === "Escape" && setRenaming(null)}
               >
-                <Input name="title" defaultValue={chat.title ?? ""} placeholder="Side chat name" aria-label="Side chat name" className="h-7 px-2 text-xs" autoFocus onBlur={() => setRenaming(null)} />
+                <Input name="title" defaultValue={chat.title ?? ""} placeholder={t("sideChatName")} aria-label={t("sideChatName")} className="h-7 px-2 text-xs" autoFocus onBlur={() => setRenaming(null)} />
               </form>
             );
           }
@@ -378,20 +386,20 @@ export function SideChatsSection({ threadId, open, onToggle }: SectionProps) {
             <CardRow
               key={chat.id}
               icon="SideChat"
-              label={chat.title ?? "Untitled side chat"}
+              label={matchingProse(language, chat.title) ?? t("untitledSideChat")}
               onClick={openChat}
-              menuLabel="Side chat actions"
+              menuLabel={t("moreActions")}
               menu={
                 <>
-                  <MenuItem icon="Columns2" label="Open in split" onSelect={openChat} />
-                  <MenuItem icon="Edit" label="Rename" onSelect={() => setRenaming(chat.id)} />
+                  <MenuItem icon="Columns2" label={t("openSplit")} onSelect={openChat} />
+                  <MenuItem icon="Edit" label={t("rename")} onSelect={() => setRenaming(chat.id)} />
                 </>
               }
               trailing={
                 busy ? (
                   <>
                     <Dot color="var(--success)" />
-                    <span>Working</span>
+                    <span>{t("working")}</span>
                   </>
                 ) : (
                   formatAgo(chat.updatedAt, now)
