@@ -1,0 +1,80 @@
+[
+ {
+  "seq": 20,
+  "type": "turn/started",
+  "createdAt": 1794671752473,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted"
+  }
+ },
+ {
+  "seq": 403,
+  "type": "turn/completed",
+  "createdAt": 1794672265753,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "status": "completed",
+   "providerCheckpointId": "providerCheckpointId-redacted"
+  }
+ },
+ {
+  "seq": 406,
+  "type": "turn/started",
+  "createdAt": 1794672279374,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted"
+  }
+ },
+ {
+  "seq": 445,
+  "type": "thread/tokenUsage/updated",
+  "createdAt": 1794672299386,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "tokenUsage": {
+    "total": {
+     "totalTokens": 3020722,
+     "inputTokens": 3004300,
+     "cachedInputTokens": 2893312,
+     "cacheReadInputTokens": 2893312,
+     "cacheWriteInputTokens": 0,
+     "outputTokens": 16422,
+     "reasoningOutputTokens": 2887
+    },
+    "last": {
+     "totalTokens": 121497,
+     "inputTokens": 121415,
+     "cachedInputTokens": 121088,
+     "cacheReadInputTokens": 121088,
+     "cacheWriteInputTokens": 0,
+     "outputTokens": 82,
+     "reasoningOutputTokens": 0
+    },
+    "modelContextWindow": 475000
+   }
+  }
+ },
+ {
+  "seq": 446,
+  "type": "thread/contextWindowUsage/updated",
+  "createdAt": 1794672299386,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "contextWindowUsage": {
+    "usedTokens": 121497,
+    "modelContextWindow": 475000,
+    "estimated": false
+   }
+  }
+ },
+ {
+  "seq": 449,
+  "type": "turn/completed",
+  "createdAt": 1794672299739,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "status": "completed",
+   "providerCheckpointId": "providerCheckpointId-redacted"
+  }
+ }
+]

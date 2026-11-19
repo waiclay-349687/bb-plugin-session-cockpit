@@ -1,0 +1,1123 @@
+[
+ {
+  "seq": 13,
+  "type": "turn/started",
+  "createdAt": 1794672149113,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted"
+  }
+ },
+ {
+  "seq": 24,
+  "type": "provider/rateLimits/updated",
+  "createdAt": 1794672159343,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "rateLimits": {
+    "providerId": "claude-code",
+    "status": "allowed",
+    "kind": "subscription-window",
+    "windows": [
+     {
+      "providerKey": "seven_day",
+      "label": "Weekly limit",
+      "status": "allowed",
+      "resetsAtMs": 1794808800000
+     }
+    ],
+    "reachedReason": null,
+    "overageStatus": "rejected",
+    "overageReason": "org_level_disabled"
+   }
+  }
+ },
+ {
+  "seq": 32,
+  "type": "turn/completed",
+  "createdAt": 1794672166924,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "status": "completed",
+   "providerCheckpointId": "providerCheckpointId-redacted"
+  }
+ },
+ {
+  "seq": 35,
+  "type": "turn/started",
+  "createdAt": 1794672266485,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted"
+  }
+ },
+ {
+  "seq": 288,
+  "type": "thread/tokenUsage/updated",
+  "createdAt": 1794672346489,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "tokenUsage": {
+    "total": {
+     "totalTokens": 582706,
+     "inputTokens": 22,
+     "cachedInputTokens": 577682,
+     "cacheReadInputTokens": 505666,
+     "cacheWriteInputTokens": 72016,
+     "outputTokens": 5002,
+     "reasoningOutputTokens": 0
+    },
+    "last": {
+     "totalTokens": 467499,
+     "inputTokens": 18,
+     "cachedInputTokens": 462990,
+     "cacheReadInputTokens": 449965,
+     "cacheWriteInputTokens": 13025,
+     "outputTokens": 4491,
+     "reasoningOutputTokens": 0
+    },
+    "modelContextWindow": 1000000,
+    "promptCacheTtlMs": 3600000
+   }
+  }
+ },
+ {
+  "seq": 289,
+  "type": "turn/completed",
+  "createdAt": 1794672346489,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "status": "completed",
+   "providerCheckpointId": "providerCheckpointId-redacted"
+  }
+ },
+ {
+  "seq": 290,
+  "type": "thread/contextWindowUsage/updated",
+  "createdAt": 1794672348594,
+  "data": {
+   "providerThreadId": "providerThreadId-redacted",
+   "contextWindowUsage": {
+    "snapshot": {
+     "capturedAt": "2026-11-14T16:05:48.590Z",
+     "providerSessionId": "providerSessionId-redacted",
+     "providerTurnId": null,
+     "model": "claude-opus-5-5",
+     "usedTokens": 73141,
+     "contextWindowTokens": 1000000,
+     "autoCompactAtTokens": 967000,
+     "estimated": true,
+     "categories": [
+      {
+       "id": "[\"claude\",\"System prompt\",0]",
+       "label": "System prompt",
+       "kind": "used",
+       "tokens": 3925,
+       "entries": []
+      },
+      {
+       "id": "[\"claude\",\"System tools\",0]",
+       "label": "System tools",
+       "kind": "used",
+       "tokens": 2918,
+       "entries": []
+      },
+      {
+       "id": "[\"claude\",\"MCP tools\",0]",
+       "label": "MCP tools",
+       "kind": "used",
+       "tokens": 609,
+       "entries": [
+        {
+         "id": "[\"alpha: mcp__alpha__tool_1\", 0]",
+         "label": "alpha: mcp__alpha__tool_1",
+         "tokens": 609
+        }
+       ]
+      },
+      {
+       "id": "[\"claude\",\"MCP server instructions\",0]",
+       "label": "MCP server instructions",
+       "kind": "used",
+       "tokens": 1225,
+       "entries": []
+      },
+      {
+       "id": "[\"claude\",\"MCP tools (deferred)\",0]",
+       "label": "MCP tools (deferred)",
+       "kind": "deferred",
+       "tokens": 8897,
+       "entries": [
+        {
+         "id": "[\"beta: mcp__beta__tool_1\", 0]",
+         "label": "beta: mcp__beta__tool_1",
+         "tokens": 870
+        },
+        {
+         "id": "[\"beta: mcp__beta__tool_2\", 0]",
+         "label": "beta: mcp__beta__tool_2",
+         "tokens": 391
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_1\", 0]",
+         "label": "gamma: mcp__gamma__tool_1",
+         "tokens": 119
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_2\", 0]",
+         "label": "gamma: mcp__gamma__tool_2",
+         "tokens": 1506
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_3\", 0]",
+         "label": "gamma: mcp__gamma__tool_3",
+         "tokens": 455
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_4\", 0]",
+         "label": "gamma: mcp__gamma__tool_4",
+         "tokens": 456
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_5\", 0]",
+         "label": "gamma: mcp__gamma__tool_5",
+         "tokens": 140
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_6\", 0]",
+         "label": "gamma: mcp__gamma__tool_6",
+         "tokens": 394
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_7\", 0]",
+         "label": "gamma: mcp__gamma__tool_7",
+         "tokens": 331
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_8\", 0]",
+         "label": "gamma: mcp__gamma__tool_8",
+         "tokens": 177
+        },
+        {
+         "id": "[\"gamma: mcp__gamma__tool_9\", 0]",
+         "label": "gamma: mcp__gamma__tool_9",
+         "tokens": 485
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_1\", 0]",
+         "label": "delta: mcp__delta__tool_1",
+         "tokens": 216
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_2\", 0]",
+         "label": "delta: mcp__delta__tool_2",
+         "tokens": 121
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_3\", 0]",
+         "label": "delta: mcp__delta__tool_3",
+         "tokens": 150
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_4\", 0]",
+         "label": "delta: mcp__delta__tool_4",
+         "tokens": 79
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_5\", 0]",
+         "label": "delta: mcp__delta__tool_5",
+         "tokens": 134
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_6\", 0]",
+         "label": "delta: mcp__delta__tool_6",
+         "tokens": 143
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_7\", 0]",
+         "label": "delta: mcp__delta__tool_7",
+         "tokens": 190
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_8\", 0]",
+         "label": "delta: mcp__delta__tool_8",
+         "tokens": 153
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_9\", 0]",
+         "label": "delta: mcp__delta__tool_9",
+         "tokens": 261
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_10\", 0]",
+         "label": "delta: mcp__delta__tool_10",
+         "tokens": 125
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_11\", 0]",
+         "label": "delta: mcp__delta__tool_11",
+         "tokens": 119
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_12\", 0]",
+         "label": "delta: mcp__delta__tool_12",
+         "tokens": 115
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_13\", 0]",
+         "label": "delta: mcp__delta__tool_13",
+         "tokens": 168
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_14\", 0]",
+         "label": "delta: mcp__delta__tool_14",
+         "tokens": 136
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_15\", 0]",
+         "label": "delta: mcp__delta__tool_15",
+         "tokens": 308
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_16\", 0]",
+         "label": "delta: mcp__delta__tool_16",
+         "tokens": 113
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_17\", 0]",
+         "label": "delta: mcp__delta__tool_17",
+         "tokens": 156
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_18\", 0]",
+         "label": "delta: mcp__delta__tool_18",
+         "tokens": 169
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_19\", 0]",
+         "label": "delta: mcp__delta__tool_19",
+         "tokens": 134
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_20\", 0]",
+         "label": "delta: mcp__delta__tool_20",
+         "tokens": 94
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_21\", 0]",
+         "label": "delta: mcp__delta__tool_21",
+         "tokens": 77
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_22\", 0]",
+         "label": "delta: mcp__delta__tool_22",
+         "tokens": 166
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_23\", 0]",
+         "label": "delta: mcp__delta__tool_23",
+         "tokens": 148
+        },
+        {
+         "id": "[\"delta: mcp__delta__tool_24\", 0]",
+         "label": "delta: mcp__delta__tool_24",
+         "tokens": 98
+        }
+       ]
+      },
+      {
+       "id": "[\"claude\",\"System tools (deferred)\",0]",
+       "label": "System tools (deferred)",
+       "kind": "deferred",
+       "tokens": 19126,
+       "entries": []
+      },
+      {
+       "id": "[\"claude\",\"Memory files\",0]",
+       "label": "Memory files",
+       "kind": "used",
+       "tokens": 17482,
+       "entries": [
+        {
+         "id": "[\"/home/user/.claude/CLAUDE.md\", 0]",
+         "label": "/home/user/.claude/CLAUDE.md",
+         "tokens": 7397
+        },
+        {
+         "id": "[\"/home/user/project/CLAUDE.md\", 0]",
+         "label": "/home/user/project/CLAUDE.md",
+         "tokens": 5379
+        },
+        {
+         "id": "[\"/home/user/.claude/projects/project/memory/MEMORY.md\", 0]",
+         "label": "/home/user/.claude/projects/project/memory/MEMORY.md",
+         "tokens": 4706
+        }
+       ]
+      },
+      {
+       "id": "[\"claude\",\"Skills\",0]",
+       "label": "Skills",
+       "kind": "used",
+       "tokens": 9944,
+       "entries": [
+        {
+         "id": "[\"skill-001\", 0]",
+         "label": "skill-001",
+         "tokens": 221
+        },
+        {
+         "id": "[\"skill-002\", 0]",
+         "label": "skill-002",
+         "tokens": 185
+        },
+        {
+         "id": "[\"skill-003\", 0]",
+         "label": "skill-003",
+         "tokens": 144
+        },
+        {
+         "id": "[\"skill-004\", 0]",
+         "label": "skill-004",
+         "tokens": 95
+        },
+        {
+         "id": "[\"skill-005\", 0]",
+         "label": "skill-005",
+         "tokens": 143
+        },
+        {
+         "id": "[\"skill-006\", 0]",
+         "label": "skill-006",
+         "tokens": 89
+        },
+        {
+         "id": "[\"skill-007\", 0]",
+         "label": "skill-007",
+         "tokens": 23
+        },
+        {
+         "id": "[\"skill-008\", 0]",
+         "label": "skill-008",
+         "tokens": 58
+        },
+        {
+         "id": "[\"skill-009\", 0]",
+         "label": "skill-009",
+         "tokens": 57
+        },
+        {
+         "id": "[\"skill-010\", 0]",
+         "label": "skill-010",
+         "tokens": 208
+        },
+        {
+         "id": "[\"skill-011\", 0]",
+         "label": "skill-011",
+         "tokens": 106
+        },
+        {
+         "id": "[\"skill-012\", 0]",
+         "label": "skill-012",
+         "tokens": 74
+        },
+        {
+         "id": "[\"skill-013\", 0]",
+         "label": "skill-013",
+         "tokens": 170
+        },
+        {
+         "id": "[\"skill-014\", 0]",
+         "label": "skill-014",
+         "tokens": 78
+        },
+        {
+         "id": "[\"skill-015\", 0]",
+         "label": "skill-015",
+         "tokens": 55
+        },
+        {
+         "id": "[\"skill-016\", 0]",
+         "label": "skill-016",
+         "tokens": 101
+        },
+        {
+         "id": "[\"skill-017\", 0]",
+         "label": "skill-017",
+         "tokens": 280
+        },
+        {
+         "id": "[\"skill-018\", 0]",
+         "label": "skill-018",
+         "tokens": 140
+        },
+        {
+         "id": "[\"skill-019\", 0]",
+         "label": "skill-019",
+         "tokens": 140
+        },
+        {
+         "id": "[\"skill-020\", 0]",
+         "label": "skill-020",
+         "tokens": 154
+        },
+        {
+         "id": "[\"skill-021\", 0]",
+         "label": "skill-021",
+         "tokens": 172
+        },
+        {
+         "id": "[\"skill-022\", 0]",
+         "label": "skill-022",
+         "tokens": 48
+        },
+        {
+         "id": "[\"skill-023\", 0]",
+         "label": "skill-023",
+         "tokens": 198
+        },
+        {
+         "id": "[\"skill-024\", 0]",
+         "label": "skill-024",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-025\", 0]",
+         "label": "skill-025",
+         "tokens": 85
+        },
+        {
+         "id": "[\"skill-026\", 0]",
+         "label": "skill-026",
+         "tokens": 51
+        },
+        {
+         "id": "[\"skill-027\", 0]",
+         "label": "skill-027",
+         "tokens": 70
+        },
+        {
+         "id": "[\"skill-028\", 0]",
+         "label": "skill-028",
+         "tokens": 75
+        },
+        {
+         "id": "[\"skill-029\", 0]",
+         "label": "skill-029",
+         "tokens": 144
+        },
+        {
+         "id": "[\"skill-030\", 0]",
+         "label": "skill-030",
+         "tokens": 185
+        },
+        {
+         "id": "[\"skill-031\", 0]",
+         "label": "skill-031",
+         "tokens": 78
+        },
+        {
+         "id": "[\"skill-032\", 0]",
+         "label": "skill-032",
+         "tokens": 74
+        },
+        {
+         "id": "[\"skill-033\", 0]",
+         "label": "skill-033",
+         "tokens": 60
+        },
+        {
+         "id": "[\"skill-034\", 0]",
+         "label": "skill-034",
+         "tokens": 75
+        },
+        {
+         "id": "[\"skill-035\", 0]",
+         "label": "skill-035",
+         "tokens": 25
+        },
+        {
+         "id": "[\"skill-036\", 0]",
+         "label": "skill-036",
+         "tokens": 23
+        },
+        {
+         "id": "[\"skill-037\", 0]",
+         "label": "skill-037",
+         "tokens": 50
+        },
+        {
+         "id": "[\"skill-038\", 0]",
+         "label": "skill-038",
+         "tokens": 49
+        },
+        {
+         "id": "[\"skill-039\", 0]",
+         "label": "skill-039",
+         "tokens": 76
+        },
+        {
+         "id": "[\"skill-040\", 0]",
+         "label": "skill-040",
+         "tokens": 139
+        },
+        {
+         "id": "[\"skill-041\", 0]",
+         "label": "skill-041",
+         "tokens": 31
+        },
+        {
+         "id": "[\"skill-042\", 0]",
+         "label": "skill-042",
+         "tokens": 93
+        },
+        {
+         "id": "[\"skill-043\", 0]",
+         "label": "skill-043",
+         "tokens": 64
+        },
+        {
+         "id": "[\"skill-044\", 0]",
+         "label": "skill-044",
+         "tokens": 21
+        },
+        {
+         "id": "[\"skill-045\", 0]",
+         "label": "skill-045",
+         "tokens": 25
+        },
+        {
+         "id": "[\"skill-046\", 0]",
+         "label": "skill-046",
+         "tokens": 57
+        },
+        {
+         "id": "[\"skill-047\", 0]",
+         "label": "skill-047",
+         "tokens": 105
+        },
+        {
+         "id": "[\"skill-048\", 0]",
+         "label": "skill-048",
+         "tokens": 34
+        },
+        {
+         "id": "[\"skill-049\", 0]",
+         "label": "skill-049",
+         "tokens": 38
+        },
+        {
+         "id": "[\"skill-050\", 0]",
+         "label": "skill-050",
+         "tokens": 147
+        },
+        {
+         "id": "[\"skill-051\", 0]",
+         "label": "skill-051",
+         "tokens": 89
+        },
+        {
+         "id": "[\"skill-052\", 0]",
+         "label": "skill-052",
+         "tokens": 41
+        },
+        {
+         "id": "[\"skill-053\", 0]",
+         "label": "skill-053",
+         "tokens": 5
+        },
+        {
+         "id": "[\"skill-054\", 0]",
+         "label": "skill-054",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-055\", 0]",
+         "label": "skill-055",
+         "tokens": 98
+        },
+        {
+         "id": "[\"skill-056\", 0]",
+         "label": "skill-056",
+         "tokens": 6
+        },
+        {
+         "id": "[\"skill-057\", 0]",
+         "label": "skill-057",
+         "tokens": 105
+        },
+        {
+         "id": "[\"skill-058\", 0]",
+         "label": "skill-058",
+         "tokens": 267
+        },
+        {
+         "id": "[\"skill-059\", 0]",
+         "label": "skill-059",
+         "tokens": 156
+        },
+        {
+         "id": "[\"skill-060\", 0]",
+         "label": "skill-060",
+         "tokens": 289
+        },
+        {
+         "id": "[\"skill-061\", 0]",
+         "label": "skill-061",
+         "tokens": 85
+        },
+        {
+         "id": "[\"skill-062\", 0]",
+         "label": "skill-062",
+         "tokens": 4
+        },
+        {
+         "id": "[\"skill-063\", 0]",
+         "label": "skill-063",
+         "tokens": 64
+        },
+        {
+         "id": "[\"skill-064\", 0]",
+         "label": "skill-064",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-065\", 0]",
+         "label": "skill-065",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-066\", 0]",
+         "label": "skill-066",
+         "tokens": 83
+        },
+        {
+         "id": "[\"skill-067\", 0]",
+         "label": "skill-067",
+         "tokens": 33
+        },
+        {
+         "id": "[\"skill-068\", 0]",
+         "label": "skill-068",
+         "tokens": 44
+        },
+        {
+         "id": "[\"skill-069\", 0]",
+         "label": "skill-069",
+         "tokens": 3
+        },
+        {
+         "id": "[\"skill-070\", 0]",
+         "label": "skill-070",
+         "tokens": 52
+        },
+        {
+         "id": "[\"skill-071\", 0]",
+         "label": "skill-071",
+         "tokens": 2
+        },
+        {
+         "id": "[\"skill-072\", 0]",
+         "label": "skill-072",
+         "tokens": 521
+        },
+        {
+         "id": "[\"skill-073\", 0]",
+         "label": "skill-073",
+         "tokens": 3
+        },
+        {
+         "id": "[\"skill-074\", 0]",
+         "label": "skill-074",
+         "tokens": 120
+        },
+        {
+         "id": "[\"skill-075\", 0]",
+         "label": "skill-075",
+         "tokens": 2
+        },
+        {
+         "id": "[\"skill-076\", 0]",
+         "label": "skill-076",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-077\", 0]",
+         "label": "skill-077",
+         "tokens": 108
+        },
+        {
+         "id": "[\"skill-078\", 0]",
+         "label": "skill-078",
+         "tokens": 4
+        },
+        {
+         "id": "[\"skill-079\", 0]",
+         "label": "skill-079",
+         "tokens": 5
+        },
+        {
+         "id": "[\"skill-080\", 0]",
+         "label": "skill-080",
+         "tokens": 80
+        },
+        {
+         "id": "[\"skill-081\", 0]",
+         "label": "skill-081",
+         "tokens": 4
+        },
+        {
+         "id": "[\"skill-082\", 0]",
+         "label": "skill-082",
+         "tokens": 91
+        },
+        {
+         "id": "[\"skill-083\", 0]",
+         "label": "skill-083",
+         "tokens": 94
+        },
+        {
+         "id": "[\"skill-084\", 0]",
+         "label": "skill-084",
+         "tokens": 5
+        },
+        {
+         "id": "[\"skill-085\", 0]",
+         "label": "skill-085",
+         "tokens": 81
+        },
+        {
+         "id": "[\"skill-086\", 0]",
+         "label": "skill-086",
+         "tokens": 2
+        },
+        {
+         "id": "[\"skill-087\", 0]",
+         "label": "skill-087",
+         "tokens": 18
+        },
+        {
+         "id": "[\"skill-088\", 0]",
+         "label": "skill-088",
+         "tokens": 41
+        },
+        {
+         "id": "[\"skill-089\", 0]",
+         "label": "skill-089",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-090\", 0]",
+         "label": "skill-090",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-091\", 0]",
+         "label": "skill-091",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-092\", 0]",
+         "label": "skill-092",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-093\", 0]",
+         "label": "skill-093",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-094\", 0]",
+         "label": "skill-094",
+         "tokens": 13
+        },
+        {
+         "id": "[\"skill-095\", 0]",
+         "label": "skill-095",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-096\", 0]",
+         "label": "skill-096",
+         "tokens": 13
+        },
+        {
+         "id": "[\"skill-097\", 0]",
+         "label": "skill-097",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-098\", 0]",
+         "label": "skill-098",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-099\", 0]",
+         "label": "skill-099",
+         "tokens": 7
+        },
+        {
+         "id": "[\"skill-100\", 0]",
+         "label": "skill-100",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-101\", 0]",
+         "label": "skill-101",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-102\", 0]",
+         "label": "skill-102",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-103\", 0]",
+         "label": "skill-103",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-104\", 0]",
+         "label": "skill-104",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-105\", 0]",
+         "label": "skill-105",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-106\", 0]",
+         "label": "skill-106",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-107\", 0]",
+         "label": "skill-107",
+         "tokens": 9
+        },
+        {
+         "id": "[\"skill-108\", 0]",
+         "label": "skill-108",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-109\", 0]",
+         "label": "skill-109",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-110\", 0]",
+         "label": "skill-110",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-111\", 0]",
+         "label": "skill-111",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-112\", 0]",
+         "label": "skill-112",
+         "tokens": 9
+        },
+        {
+         "id": "[\"skill-113\", 0]",
+         "label": "skill-113",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-114\", 0]",
+         "label": "skill-114",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-115\", 0]",
+         "label": "skill-115",
+         "tokens": 14
+        },
+        {
+         "id": "[\"skill-116\", 0]",
+         "label": "skill-116",
+         "tokens": 13
+        },
+        {
+         "id": "[\"skill-117\", 0]",
+         "label": "skill-117",
+         "tokens": 13
+        },
+        {
+         "id": "[\"skill-118\", 0]",
+         "label": "skill-118",
+         "tokens": 14
+        },
+        {
+         "id": "[\"skill-119\", 0]",
+         "label": "skill-119",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-120\", 0]",
+         "label": "skill-120",
+         "tokens": 140
+        },
+        {
+         "id": "[\"skill-121\", 0]",
+         "label": "skill-121",
+         "tokens": 482
+        },
+        {
+         "id": "[\"skill-122\", 0]",
+         "label": "skill-122",
+         "tokens": 236
+        },
+        {
+         "id": "[\"skill-123\", 0]",
+         "label": "skill-123",
+         "tokens": 83
+        },
+        {
+         "id": "[\"skill-124\", 0]",
+         "label": "skill-124",
+         "tokens": 63
+        },
+        {
+         "id": "[\"skill-125\", 0]",
+         "label": "skill-125",
+         "tokens": 64
+        },
+        {
+         "id": "[\"skill-126\", 0]",
+         "label": "skill-126",
+         "tokens": 115
+        },
+        {
+         "id": "[\"skill-127\", 0]",
+         "label": "skill-127",
+         "tokens": 127
+        },
+        {
+         "id": "[\"skill-128\", 0]",
+         "label": "skill-128",
+         "tokens": 390
+        },
+        {
+         "id": "[\"skill-129\", 0]",
+         "label": "skill-129",
+         "tokens": 84
+        },
+        {
+         "id": "[\"skill-130\", 0]",
+         "label": "skill-130",
+         "tokens": 123
+        },
+        {
+         "id": "[\"skill-131\", 0]",
+         "label": "skill-131",
+         "tokens": 92
+        },
+        {
+         "id": "[\"skill-132\", 0]",
+         "label": "skill-132",
+         "tokens": 2
+        },
+        {
+         "id": "[\"skill-133\", 0]",
+         "label": "skill-133",
+         "tokens": 6
+        },
+        {
+         "id": "[\"skill-134\", 0]",
+         "label": "skill-134",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-135\", 0]",
+         "label": "skill-135",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-136\", 0]",
+         "label": "skill-136",
+         "tokens": 10
+        },
+        {
+         "id": "[\"skill-137\", 0]",
+         "label": "skill-137",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-138\", 0]",
+         "label": "skill-138",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-139\", 0]",
+         "label": "skill-139",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-140\", 0]",
+         "label": "skill-140",
+         "tokens": 12
+        },
+        {
+         "id": "[\"skill-141\", 0]",
+         "label": "skill-141",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-142\", 0]",
+         "label": "skill-142",
+         "tokens": 9
+        },
+        {
+         "id": "[\"skill-143\", 0]",
+         "label": "skill-143",
+         "tokens": 7
+        },
+        {
+         "id": "[\"skill-144\", 0]",
+         "label": "skill-144",
+         "tokens": 8
+        },
+        {
+         "id": "[\"skill-145\", 0]",
+         "label": "skill-145",
+         "tokens": 11
+        },
+        {
+         "id": "[\"skill-146\", 0]",
+         "label": "skill-146",
+         "tokens": 8
+        }
+       ]
+      },
+      {
+       "id": "[\"claude\",\"Messages\",0]",
+       "label": "Messages",
+       "kind": "used",
+       "tokens": 37038,
+       "entries": []
+      },
+      {
+       "id": "[\"claude\",\"Autocompact buffer\",0]",
+       "label": "Autocompact buffer",
+       "kind": "reserved",
+       "tokens": 33000,
+       "entries": []
+      },
+      {
+       "id": "[\"claude\",\"Free space\",0]",
+       "label": "Free space",
+       "kind": "free",
+       "tokens": 893859,
+       "entries": []
+      }
+     ]
+    },
+    "usedTokens": 73141,
+    "modelContextWindow": 1000000,
+    "estimated": true
+   }
+  }
+ }
+]
