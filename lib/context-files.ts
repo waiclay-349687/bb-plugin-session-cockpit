@@ -1,9 +1,9 @@
 /**
  * [INPUT]: 无外部依赖 (不碰 node:path / node:os: 本文件同时进浏览器包, home 与"是不是文件"由调用方传入)
  * [OUTPUT]: 对外提供上下文文件的纯逻辑: CONTEXT_LEVELS / LEVEL_LABELS / ContextFile 等类型; 发现侧 (host.ts 用) candidatePaths / listedDirs / parentDirs / memorySlug / classifyPath / classifyRelative / compareRelative / parseGitStatus / changedMatcher / resolveImports / extractImportTokens;
- *           展示侧 (前端用) loadedEntries / mergeLoaded / summarize / groupByLevel / inlineSelection / groupByTopDir / fileLabel / relativePath
+ *           用量与展示侧 (后端及前端用) contextPathKey / contextFileKeys / loadedEntries / mergeLoaded / fileUsageSummary / summarize / groupByLevel / inlineSelection / groupByTopDir / fileLabel / relativePath
  * [POS]: lib 层的"上下文文件"领域核心 (词汇见 GLOSSARY.md): 扫描元数据可供 context-estimate.ts 估算文件占用；一个文件只属于一个层级, 层级由路径唯一决定; 消费者: host.ts (发现)、contract.ts (层级枚举)、components/cockpit/context-files-section.tsx (展示)、test;
- *        与 lib/usage.ts 的边界: 那边管上下文窗口的占用口径, 本文件只借用它的 Memory files 分类条目来判断"已加载"
+ *        与 lib/usage.ts 的边界: 那边管上下文窗口的占用口径, 本文件组合官方明细与估算路径产生的文件状态
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 
@@ -40,7 +40,9 @@ export interface ContextFile {
   dir: string;
   /** 工作区里有未提交改动 (含未跟踪); 仓库外的文件恒为 false */
   changed: boolean;
-  /** 扫描导入时顺带取得的磁盘字节数 */
+  /** 宿主扫描时解析出的符号链接目标（与 path 不同时） */
+  realPath?: string;
+  /** 宿主扫描取得的磁盘字节数 */
   sizeBytes?: number;
   /** 被本文件用 @路径 引进来的文件, 只展开一层 */
   imports: ContextImport[];
@@ -274,7 +276,7 @@ export async function resolveImports(
 }
 
 // ---------------------------------------------------------------------------
-// 已加载 (只有一个来源: provider 的上下文明细里 Memory files 分类的条目)
+// 已加载 (官方 Memory files、已观测读取和启动说明估算)
 // ---------------------------------------------------------------------------
 
 export interface LoadedEntry {
@@ -284,10 +286,11 @@ export interface LoadedEntry {
 }
 
 export interface ContextFileView extends ContextFile {
-  /** true / false 只在有上下文明细时出现; null = 不知道 (Codex 线程、明细还没采到) */
+  /** true / false 表示当前统计是否归入该文件；null 表示尚未取得统计 */
   loaded: boolean | null;
   /** 已加载时这份文件占的 token */
   tokens: number | null;
+  source?: FileUsageSource;
 }
 
 /**
@@ -301,15 +304,50 @@ export function loadedEntries(
   return [...(context.categories.find((category) => category.label === "Memory files")?.entries ?? [])];
 }
 
-/** macOS 上 /tmp、/var、/etc 是 /private 下的符号链接, 两种写法算同一个路径 */
-const realish = (path: string): string => path.replace(/^\/private(?=\/(?:tmp|var|etc)(?:\/|$))/, "");
+export type FileUsageSource = "official" | "read" | "startup";
+export interface ContextFileUsage {
+  path: string;
+  label: string;
+  tokens: number;
+  source: FileUsageSource;
+}
 
-export function mergeLoaded(files: readonly ContextFile[], entries: readonly LoadedEntry[] | null): ContextFileView[] {
+/** 工作区路径和 macOS 系统目录的两种拼写使用同一个键。 */
+export function contextPathKey(path: string, root?: string | null): string | null {
+  if (!path || path.startsWith("~") || /[\0\r\n]/.test(path)) return null;
+  if (!path.startsWith("/") && !root?.startsWith("/")) return null;
+  return normalize(path.startsWith("/") ? path : join(root!, path))
+    .replace(/^\/private(?=\/(?:tmp|var|etc)(?:\/|$))/, "");
+}
+
+export function contextFileKeys(file: ContextFile): string[] {
+  return [...new Set([contextPathKey(file.path), contextPathKey(file.realPath ?? file.path)].flatMap(key => key ? [key] : []))];
+}
+
+export function fileUsageSummary(stats: ContextFileStats, window: number) {
+  const observed = stats.entries.some(entry => entry.source === "read");
+  const estimated = stats.entries.some(entry => entry.source !== "official");
+  const tokens = stats.entries.reduce((sum, entry) => sum + entry.tokens, 0);
+  return { count: `${stats.entries.length}/${stats.total}`, tokens, ratio: window > 0 ? tokens / window : null, estimated, observed };
+}
+
+export interface ContextFileStats {
+  total: number;
+  entries: ContextFileUsage[];
+  basis: "official" | "estimated" | "observed";
+}
+
+export function mergeLoaded(files: readonly ContextFile[], entries: readonly (LoadedEntry | ContextFileUsage)[] | null): ContextFileView[] {
   if (entries === null) return files.map((file) => ({ ...file, loaded: null, tokens: null }));
-  const tokens = new Map(entries.map((entry) => [realish(entry.label), entry.tokens]));
-  return files.map((file) => {
-    const hit = tokens.get(realish(file.path));
-    return { ...file, loaded: hit !== undefined, tokens: hit ?? null };
+  const usage = new Map(entries.map(entry => [contextPathKey("path" in entry ? entry.path : entry.label), entry]));
+  return files.map(file => {
+    const entry = usage.get(contextPathKey(file.path));
+    return {
+      ...file,
+      loaded: entry !== undefined,
+      tokens: entry?.tokens ?? null,
+      ...(entry && "source" in entry && { source: entry.source }),
+    };
   });
 }
 
@@ -353,14 +391,14 @@ export const INLINE_LIMIT = 8;
 /**
  * 一个层级点开后就地列哪些文件。不超过 limit 个就全列; 更多时只列值得一眼看到的
  * (已加载的、有改动的、自动记忆的索引 MEMORY.md), 最多 limit 个, 其余进弹层 (showAll)。
- * 模块层级因此不会变成几十行的墙: 实测上下文明细从不列模块文件, 那里通常只剩有改动的几个。
+ * 模块层级即使少于上限也让已加载文件优先。
  */
 export function inlineSelection(group: LevelGroup, limit = INLINE_LIMIT): { files: ContextFileView[]; showAll: boolean } {
   const pinned = (file: ContextFileView) => file.level === "memory" && file.name === MEMORY_INDEX;
   // 索引 → 已加载 → 有改动; 同档保持原顺序
   const rank = (file: ContextFileView) => (pinned(file) ? 0 : file.loaded === true ? 1 : file.changed ? 2 : 3);
   const ordered = [...group.files].sort((a, b) => rank(a) - rank(b));
-  if (ordered.length <= limit) return { files: group.level === "memory" ? ordered : group.files, showAll: false };
+  if (ordered.length <= limit) return { files: group.level === "memory" || group.level === "modules" ? ordered : group.files, showAll: false };
   return { files: ordered.filter((file) => rank(file) < 3).slice(0, limit), showAll: true };
 }
 

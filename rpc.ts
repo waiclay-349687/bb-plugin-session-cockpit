@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract、zod, 以及 contract.ts 的 listenerSchema 与 contextFileSchema
- * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约，区分总量估算与插件分类估算
+ * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约，含上下文文件的官方、启动估算和观测来源
  * [POS]: 插件根的前后端共享契约 (前端 experimental_useRpcQuery 需要运行时契约对象, 故不能留在 server.ts); 消费者: server.ts (注册 handler)、components/cockpit/data.ts (读取); 与 contract.ts 的边界: contract.ts 只管 server ↔ 宿主机
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -23,12 +23,15 @@ const tokensSchema = z.object({
 });
 
 
+const fileSourceSchema = z.enum(["official", "read", "startup"]);
+const fileUsageSchema = z.object({ path: z.string(), label: z.string(), tokens: z.number(), source: fileSourceSchema });
+
 const categorySchema = z.object({
   id: z.string(),
   label: z.string(),
   kind: z.enum(["used", "reserved", "free", "deferred"]),
   tokens: z.number(),
-  entries: z.array(z.object({ id: z.string(), label: z.string(), tokens: z.number() })),
+  entries: z.array(z.object({ id: z.string(), label: z.string(), tokens: z.number(), path: z.string().optional(), source: fileSourceSchema.optional() })),
 });
 
 const sessionSchema = z.object({
@@ -41,6 +44,11 @@ const sessionSchema = z.object({
   hostId: z.string().nullable(),
   environmentId: z.string().nullable(),
   environmentPath: z.string().nullable(),
+  contextFiles: z.object({
+    total: z.number(),
+    basis: z.enum(["official", "estimated", "observed"]),
+    entries: z.array(fileUsageSchema),
+  }).nullable(),
   context: z
     .object({
       usedTokens: z.number(),

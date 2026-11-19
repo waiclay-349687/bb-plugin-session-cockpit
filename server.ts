@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 bb.sdk 的 threads (get/context/events)、environments; 依赖宿主入口 (contract.ts) 发现端口与上下文文件; 依赖 lib/usage.ts 归一用量、lib/context-estimate.ts 对缺少官方分类的窗口进行估算
+ * [INPUT]: 依赖 bb.sdk 的 threads (get/context/events)、environments; 依赖宿主入口 (contract.ts) 发现端口与上下文文件; 依赖 lib/usage.ts 归一用量、lib/context-estimate.ts 追踪已读并估算分类
  * [OUTPUT]: 对外提供插件工厂 (default export): 注册 rpc.ts 契约的全部 handler、线程事件驱动的失效刷新, 以及 `bb session-cockpit` CLI
  * [POS]: 插件后端入口; 消费者: components/cockpit/* (经 RPC)、agent (经 CLI); 与 host.ts 的边界: 本文件解析线程→环境→宿主机, host.ts 只在机器上执行 lsof 与读文件系统; 与 rpc.ts 的边界: 契约形状在 rpc.ts, 本文件只实现
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
@@ -7,7 +7,8 @@
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { ESTIMATE_EVENTS, estimateCategories, isContextBoundary, messageEstimates, shouldEstimate } from "./lib/context-estimate";
+import { ESTIMATE_EVENTS, contextFileUsage, estimateCategories, messageEstimates, scanWindowActivity, shouldEstimate, type WindowActivity } from "./lib/context-estimate";
+import { fileUsageSummary, loadedEntries } from "./lib/context-files";
 import { hostContract, type ListenerInfo } from "./contract";
 import {
   rpcContract,
@@ -86,7 +87,7 @@ export default function plugin(bb: BbPluginApi) {
 
   type EventQuery = Parameters<typeof bb.sdk.threads.events.list>[0];
 
-  async function recentEvents(query: EventQuery, pages: number, stopAtBoundary = false) {
+  async function recentEvents(query: EventQuery, pages: number) {
     let beforeSeq = query.beforeSeq;
     const all: Awaited<ReturnType<typeof bb.sdk.threads.events.list>>[number][] = [];
     for (let page = 0; page < pages; page++) {
@@ -94,29 +95,29 @@ export default function plugin(bb: BbPluginApi) {
         ...query, order: "desc", limit: String(EVENT_PAGE_SIZE), beforeSeq,
       });
       all.push(...batch);
-      if (batch.length < EVENT_PAGE_SIZE || (stopAtBoundary && batch.some(isContextBoundary))) break;
+      if (batch.length < EVENT_PAGE_SIZE) break;
       beforeSeq = String(batch[batch.length - 1]!.seq);
     }
     return all;
   }
 
-  // 同一份用量快照可被多个分区反复查询。只缓存分类数字，不保留对话或附件。
-  const messageCache = new Map<string, { seq: number; entries: ReturnType<typeof messageEstimates> }>();
-  async function readMessageEstimates(threadId: string, signal?: AbortSignal) {
-    const [latest] = await bb.sdk.threads.events.list({
-      threadId, types: ["thread/contextWindowUsage/updated", "thread/context/cleared", "thread/compacted"],
-      order: "desc", limit: "1", signal,
-    });
-    if (latest && isContextBoundary(latest)) return [];
-    const cached = messageCache.get(threadId);
-    if (latest && cached?.seq === latest.seq) return cached.entries;
-    const events = await recentEvents({ threadId, types: ESTIMATE_EVENTS, beforeSeq: latest && String(latest.seq), signal }, 3, true);
-    const entries = messageEstimates(events);
-    if (latest) {
-      messageCache.set(threadId, { seq: latest.seq, entries });
-      if (messageCache.size > 64) messageCache.delete(messageCache.keys().next().value!);
+  const activityCache = new Map<string, { root: string | null; includeMessages: boolean; activity: WindowActivity }>();
+  async function readActivity(threadId: string, root: string | null, includeMessages: boolean, signal?: AbortSignal) {
+    const types = includeMessages ? ESTIMATE_EVENTS : ["item/completed", "thread/compacted", "thread/context/cleared"] as const;
+    const query = { threadId, types, order: "desc" as const, signal };
+    const [head] = await bb.sdk.threads.events.list({ ...query, limit: "1" });
+    if (!head) return null;
+    const cached = activityCache.get(threadId);
+    const previous = cached?.root === root && cached.includeMessages === includeMessages ? cached.activity : undefined;
+    const activity = await scanWindowActivity(head.seq, EVENT_PAGE_SIZE, before => bb.sdk.threads.events.list({
+      ...query, limit: String(EVENT_PAGE_SIZE), beforeSeq: before === undefined ? undefined : String(before),
+    }), root, includeMessages ? 300 : 0, previous);
+    // 只保留路径与数字；并发请求不能用旧事件覆盖已完成的新扫描。
+    if ((activityCache.get(threadId)?.activity.seq ?? 0) <= head.seq) {
+      activityCache.set(threadId, { root, includeMessages, activity });
+      if (activityCache.size > 64) activityCache.delete(activityCache.keys().next().value!);
     }
-    return entries;
+    return activity;
   }
 
   // ----- 会话快照 -----
@@ -135,16 +136,20 @@ export default function plugin(bb: BbPluginApi) {
     const official = snapshot ? sortCategories(snapshot.categories) : [];
     const usedTokens = snapshot?.usedTokens ?? ctx?.usedTokens ?? 0;
     const windowTokens = snapshot?.contextWindowTokens ?? ctx?.modelContextWindow ?? 0;
-    let categories: ContextCategory[] = official;
-    // Claude 未收到首个快照时仍显示原来的等待态。
     const breakdownEstimated = shouldEstimate(thread.providerId, windowTokens, official);
+    const [workspace, activity] = await Promise.all([
+      workspaceContextFiles(resolved),
+      readActivity(threadId, resolved.environmentPath, breakdownEstimated, signal).catch(() => null),
+    ]);
+    signal?.throwIfAborted();
+    const officialFiles = loadedEntries({ categories: official });
+    const { stats, accountedPaths } = contextFileUsage(workspace.files, activity?.paths ?? new Set(), officialFiles, thread.providerId);
+    let categories: ContextCategory[] = official;
     if (breakdownEstimated) {
-      const [messages, contextFiles] = await Promise.all([
-        readMessageEstimates(threadId, signal).catch(() => []),
-        workspaceContextFiles(resolved),
-      ]);
-      signal?.throwIfAborted();
-      categories = estimateCategories(usedTokens, windowTokens, messages, thread.providerId, contextFiles.files);
+      const messages = activity ? messageEstimates(activity.messages, accountedPaths) : [];
+      categories = estimateCategories(usedTokens, windowTokens, messages, stats.entries.map(entry => ({ ...entry, id: entry.path })));
+      // Workspace 与 Usage 共用预算取整后的条目。
+      stats.entries = stats.entries.map((entry, index) => ({ ...entry, tokens: categories[1]!.entries[index]!.tokens }));
     }
 
     return {
@@ -157,6 +162,7 @@ export default function plugin(bb: BbPluginApi) {
       hostId: resolved.hostId,
       environmentId: resolved.environmentId,
       environmentPath: resolved.environmentPath,
+      contextFiles: workspace.hostId ? stats : null,
       context: ctx
         ? {
             usedTokens,
@@ -330,7 +336,7 @@ export default function plugin(bb: BbPluginApi) {
   });
   bb.events.on("thread.deleted", ({ thread }) => {
     touchSideChat(thread);
-    messageCache.delete(thread.id);
+    activityCache.delete(thread.id);
     lastFlush.delete(thread.id);
     const timer = pending.get(thread.id);
     if (timer) clearTimeout(timer);
@@ -340,7 +346,7 @@ export default function plugin(bb: BbPluginApi) {
   bb.onDispose(() => {
     for (const timer of pending.values()) clearTimeout(timer);
     pending.clear();
-    messageCache.clear();
+    activityCache.clear();
     lastFlush.clear();
     contextFilesCache.clear();
   });
@@ -413,7 +419,9 @@ function summaryJson(session: SessionSnapshot) {
         })),
       }
     : null;
-  return { ...session, context };
+  const stats = session.contextFiles;
+  const contextFiles = stats ? { total: stats.total, basis: stats.basis, ...fileUsageSummary(stats, context?.windowTokens ?? 0) } : null;
+  return { ...session, context, contextFiles };
 }
 
 function summaryText(session: SessionSnapshot): string {
@@ -432,6 +440,10 @@ function summaryText(session: SessionSnapshot): string {
     if (ctx.cost) lines.push(`Cost: ${formatCost(ctx.cost)}`);
   } else {
     lines.push("Context: not measured yet");
+  }
+  if (session.contextFiles) {
+    const { count, ratio, estimated } = fileUsageSummary(session.contextFiles, ctx?.windowTokens ?? 0);
+    lines.push(`Context files: ${count} loaded${ratio === null ? "" : ` · ${estimated ? "≈" : ""}${formatPercent(ratio)} of window`}`);
   }
   const t = session.tokens;
   if (t.session) {

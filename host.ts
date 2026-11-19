@@ -1,15 +1,15 @@
 /**
  * [INPUT]: 依赖宿主机的 lsof / ps / docker (可选) / git (可选) 命令、工作区的 .bb/ports.json (可选) 与 Node child_process/fetch/fs; 依赖 lib/lsof.ts 的解析与归属判定、lib/context-files.ts 的层级判定与导入解析
- * [OUTPUT]: 对外提供宿主入口 (default export): listListeners 列出工作区内进程监听的端口及其归属, stopListener 结束其中可停止的一个, listContextFiles 列出工作区的上下文文件 (层级、有无改动、导入与扫描时的字节数; 只读)
+ * [OUTPUT]: 对外提供宿主入口 (default export): listListeners 列出工作区内进程监听的端口及其归属, stopListener 结束其中可停止的一个, discoverContextFiles 与 listContextFiles 列出工作区的上下文文件 (层级、有无改动、导入、各层级字节数及符号链接目标; 只读)
  * [POS]: 插件的 bb.host 入口, 在线程所在机器上以完整信任运行; 消费者: server.ts 的 servers/stopServer/contextFiles RPC; 与 server.ts 的边界: 只做本机进程与文件层面的事, 不认识线程与项目
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { execFile } from "node:child_process";
-import { readFile, readdir, readlink, stat } from "node:fs/promises";
+import { readFile, readdir, readlink, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
-import { hostContract, type ListenerInfo } from "./contract";
+import { hostContract, type ListenerInfo } from "./contract.ts";
 import {
   CONTEXT_LEVELS,
   IMPORT_LEVELS,
@@ -23,7 +23,7 @@ import {
   resolveImports,
   type ContextFile,
   type GitStatus,
-} from "./lib/context-files";
+} from "./lib/context-files.ts";
 import {
   browserUrl,
   classifyOwnership,
@@ -41,7 +41,7 @@ import {
   type Listener,
   type PortLabel,
   type ProcessRow,
-} from "./lib/lsof";
+} from "./lib/lsof.ts";
 
 const COMMAND_TIMEOUT_MS = 15_000; // docker stop 默认等容器 10 秒
 const PROBE_TIMEOUT_MS = 800;
@@ -299,7 +299,7 @@ async function walkWorkspace(root: string): Promise<string[]> {
         const child = rel === "" ? entry.name : `${rel}/${entry.name}`;
         if (entry.isDirectory()) {
           if (!entry.name.startsWith(".") && !WALK_SKIP.has(entry.name)) next.push(child);
-        } else if (entry.isFile() && rel !== "" && classifyRelative(child) !== null) {
+        } else if ((entry.isFile() || entry.isSymbolicLink()) && rel !== "" && classifyRelative(child) !== null) {
           found.push(child);
         }
       }
@@ -335,23 +335,19 @@ async function workspaceFiles(root: string, signal: AbortSignal): Promise<{ isGi
   return { isGitRepo: true, paths, status };
 }
 
-/** 复用找导入所需的 stat。只回传文件大小与导入，不把正文传给服务端。 */
-async function contextMetadata(path: string, home: string): Promise<Pick<ContextFile, "imports" | "sizeBytes">> {
-  const info = await stat(path).catch(() => null);
-  if (!info?.isFile()) return { imports: [] };
-  const sizeBytes = info.size;
-  if (sizeBytes > IMPORT_READ_LIMIT) return { sizeBytes, imports: [] };
-  try {
-    const imports = await resolveImports(await readFile(path, "utf8"), path, home, isFile);
-    return { sizeBytes, imports };
-  } catch {
-    return { sizeBytes, imports: [] };
-  }
+/** 所有层级只需元数据。仅导入层级读取体积受限的说明文件。 */
+async function contextMetadata(path: string, home: string, readImports: boolean) {
+  const [info, resolved] = await Promise.all([stat(path).catch(() => null), realpath(path).catch(() => path)]);
+  if (!info?.isFile()) return null;
+  const metadata = { sizeBytes: info.size, ...(resolved !== path && { realPath: resolved }) };
+  const imports = readImports && info.size <= IMPORT_READ_LIMIT && !/\.jsonl$/i.test(resolved)
+    ? await readFile(resolved, "utf8").then(text => resolveImports(text, path, home, isFile)).catch(() => [])
+    : [];
+  return { ...metadata, imports };
 }
 
-async function discoverContextFiles(rawRoot: string, signal: AbortSignal): Promise<ContextFilesResult> {
+export async function discoverContextFiles(rawRoot: string, signal: AbortSignal, home = homedir()): Promise<ContextFilesResult> {
   const root = rawRoot.length > 1 ? rawRoot.replace(/\/+$/, "") : rawRoot;
-  const home = homedir();
   const [fixed, listed, workspace] = await Promise.all([
     Promise.all(candidatePaths(root, home).map(async (path) => ((await isFile(path)) ? path : null))),
     Promise.all(listedDirs(root, home).map(listMarkdown)),
@@ -368,11 +364,13 @@ async function discoverContextFiles(rawRoot: string, signal: AbortSignal): Promi
     [...paths].map(async (path): Promise<ContextFile | null> => {
       const kind = classifyPath(path, { root, home });
       if (!kind) return null;
+      const metadata = await contextMetadata(path, home, IMPORT_LEVELS.includes(kind.level));
+      if (!metadata) return null;
       return {
         path,
         ...kind,
         changed: workspace.isGitRepo && path.startsWith(inside) && isChanged(path.slice(inside.length)),
-        ...(IMPORT_LEVELS.includes(kind.level) ? await contextMetadata(path, home) : { imports: [] }),
+        ...metadata,
       };
     }),
   );

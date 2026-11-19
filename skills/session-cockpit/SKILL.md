@@ -41,7 +41,9 @@ Inside a thread, `--thread` defaults to the current thread.
 - Context figures come from the provider and are often estimates; treat them
   as a budget. An Estimated breakdown splits the reported total using recent BB
   events and likely instruction files. The residual includes unobserved history.
-  Only provider snapshots can establish which files were loaded.
+  The Context files line shows loaded or observed files out of the scanned inventory,
+  with their share of the window. Claude Code usage stays as reported. File read
+  observations are reset by compaction or clear and use estimated sizes.
 - "Last turn" token counts are a whole turn's sum, not one request; do not use
   them as the context size.
 - A cold cache means the next message re-reads the whole context uncached.

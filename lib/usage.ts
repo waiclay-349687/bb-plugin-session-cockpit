@@ -1,6 +1,7 @@
 /**
  * [INPUT]: 依赖 bb 线程事件 (thread/tokenUsage/updated、turn/*) 与 threads.context() 的原始 JSON
  * [OUTPUT]: 对外提供 normalizeTokens / summarizeEvents / groupConnectors / cacheState / sortCategories 等纯函数: 把各家 provider 口径不一的用量数据归一成面板可直接渲染的结构
+ *           分类条目允许附带文件路径和统计来源。
  * [POS]: lib 层的领域核心, 无 IO; 消费者: server.ts (组装快照)、app 组件 (缓存倒计时)、test/usage.test.ts; 与 lib/format.ts 的边界: 本文件只算数, 不做显示格式化
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -185,6 +186,8 @@ export function summarizeEvents(events: readonly UsageEvent[]): EventSummary {
 export type CategoryKind = "used" | "reserved" | "free" | "deferred";
 
 export interface ContextEntry {
+  path?: string;
+  source?: "official" | "read" | "startup";
   id: string;
   label: string;
   tokens: number;

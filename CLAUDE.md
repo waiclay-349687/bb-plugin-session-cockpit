@@ -12,7 +12,7 @@ docs/: 交接说明 HANDOFF.md（现状、未验证项、取舍、踩过的坑�
 
 <config>
 package.json: 插件清单（bb.server / bb.app / bb.host / branding）与 npm 脚本
-rpc.ts: 前端 ↔ 后端 RPC 契约，breakdownEstimated 仅标记插件估算的分类（前端需要运行时契约对象，故独立于 server.ts）
+rpc.ts: 前端 ↔ 后端 RPC 契约，breakdownEstimated 标记插件估算的分类，contextFiles 记录文件统计及来源（前端需要运行时契约对象，故独立于 server.ts）
 contract.ts: 后端 ↔ 宿主机 RPC 契约（listListeners / stopListener / listContextFiles）
 server.ts: 后端入口；host.ts: 宿主入口（lsof 发现端口；git ls-files / git status 与读文件系统发现上下文文件，只读）；app.tsx: 前端注册
 GLOSSARY.md: 领域词汇（上下文文件、层级、已加载 / 有改动、组 / 项），界面文案与代码命名以它为准

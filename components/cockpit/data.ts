@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery, 依赖 rpc.ts 契约
- * [OUTPUT]: 对外提供 useSession / useServers / useContextFiles / useSideChats / useScripts / useNow: 卡片分区的数据入口
+ * [OUTPUT]: 对外提供 useSession / useServers / useContextFiles / useSideChats / useScripts / useNow: 卡片分区的数据入口；会话快照可随展开的文件清单轮询
  * [POS]: components/cockpit 的数据层; 消费者: 本目录全部分区; 与 prefs.ts 的边界: 本文件只读服务端数据, 客户端偏好在 prefs.ts
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -8,13 +8,15 @@ import { useEffect, useRef, useState } from "react";
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { rpcContract } from "../../rpc";
 
-/** 会话快照: 服务端在线程事件推进时失效刷新, 这里无需轮询 */
-export function useSession(threadId: string) {
-  return experimental_useRpcQuery({
+/** 会话快照在线程事件推进时刷新。Workspace 展开时也轮询，以反映编辑器外部变化 */
+export function useSession(threadId: string, pollContextFiles = false) {
+  const query = experimental_useRpcQuery({
     contract: rpcContract,
     method: "session",
     input: { threadId },
   });
+  usePollWhile(query.refetch, pollContextFiles, 30_000);
+  return query;
 }
 
 /**

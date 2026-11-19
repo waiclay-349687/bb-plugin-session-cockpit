@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 data.ts 的 useSession/useNow、lib/usage.ts 的标签与工具名推断、lib/palette.ts 配色、宿主 FileLink 与 threads.compact、脚手架 Dialog
- * [OUTPUT]: 对外提供 ContextSection: 官方快照与标明来源的估算分类共用 Context 分区的渐进展示 (一行摘要 → 就地展开分类明细 → 分类再就地展开前 8 个条目 → 更多时弹层搜索); CompactButton: 两步确认的压缩按钮 (usage-section 复用)
+ * [OUTPUT]: 对外提供 ContextSection: 官方分段与估算分段共用 Context 界面，文件明细另标观测读取来源 (一行摘要 → 就地展开分类明细 → 分类再就地展开前 8 个条目 → 更多时弹层搜索); CompactButton: 两步确认的压缩按钮 (usage-section 复用)
  * [POS]: 对应 Claude Desktop 的 Context 面板; 消费者: cockpit.tsx; 与 usage-section.tsx 的边界: 本分区只讲"窗口里装了什么", 消耗、额度与缓存在 Usage 分区
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { SessionCategory, SessionContext, SessionSnapshot } from "../../rpc";
+import { fileUsageSummary } from "../../lib/context-files";
 import { formatAgo, formatPercent, formatTokens } from "../../lib/format";
 import { categoryColor, meterTone } from "../../lib/palette";
 import { displayCategoryLabel, toolName } from "../../lib/usage";
@@ -53,20 +54,34 @@ function Body({ session, ctx }: { session: SessionSnapshot; ctx: SessionContext 
   const now = useNow(30_000);
   // 就地展开的分类, 可同时展开多个; 条目很多时再用弹层看全部
   const [expanded, setExpanded] = useState<string[]>([]);
-  const [detail, setDetail] = useState<SessionCategory | null>(null);
-  const used = ctx.categories.filter((c) => c.kind === "used");
-  const tail = ctx.categories.filter((c) => c.kind === "reserved" || c.kind === "free");
-  const deferred = ctx.categories.filter((c) => c.kind === "deferred");
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const stats = session.contextFiles;
+  const fileSummary = stats && stats.total > 0 ? fileUsageSummary(stats, ctx.windowTokens) : null;
+  const memory = ctx.categories.find(c => c.label === "Memory files");
+  const reads = ctx.breakdownEstimated ? [] : (stats?.entries ?? [])
+    .filter(entry => entry.source === "read")
+    .map(entry => ({ ...entry, id: entry.path }));
+  const readOnlyCategory: SessionCategory | null = !memory && reads.length > 0 ? {
+    id: "observed-files", label: "Files read", kind: "used",
+    tokens: reads.reduce((sum, entry) => sum + entry.tokens, 0), entries: reads,
+  } : null;
+  const used = ctx.categories.filter(c => c.kind === "used").map(category =>
+    category === memory && reads.length ? { ...category, entries: [...category.entries, ...reads] } : category);
+  if (readOnlyCategory) used.push(readOnlyCategory);
+  const tail = ctx.categories.filter(c => c.kind === "reserved" || c.kind === "free");
+  const deferred = ctx.categories.filter(c => c.kind === "deferred");
+  const detail = [...used, ...tail, ...deferred].find(c => c.id === detailId) ?? null;
   const row = (category: SessionCategory, index: number) => (
     <CategoryRow
       key={category.id}
       category={category}
-      color={categoryColor(category.label, category.kind, index)}
+      fileCount={category.label === "Context files" || category.label === "Memory files" || category === readOnlyCategory ? fileSummary?.count : undefined}
+      color={category === readOnlyCategory ? "transparent" : categoryColor(category.label, category.kind, index)}
       windowTokens={ctx.windowTokens}
       hostId={session.hostId}
       open={expanded.includes(category.id)}
-      onToggle={() => setExpanded(expanded.includes(category.id) ? expanded.filter((id) => id !== category.id) : [...expanded, category.id])}
-      onShowAll={() => setDetail(category)}
+      onToggle={() => setExpanded(previous => previous.includes(category.id) ? previous.filter(id => id !== category.id) : [...previous, category.id])}
+      onShowAll={() => setDetailId(category.id)}
     />
   );
   return (
@@ -79,11 +94,12 @@ function Body({ session, ctx }: { session: SessionSnapshot; ctx: SessionContext 
           {formatPercent(1 - ctx.usedTokens / ctx.windowTokens, 0)} left. Compact, or continue in a new thread before the window fills.
         </Hint>
       ) : null}
-      {ctx.categories.length === 0 ? (
+      {ctx.categories.length === 0 && !readOnlyCategory ? (
         <Hint>{session.running ? "The breakdown arrives when this turn ends." : "This provider reports the total only."}</Hint>
       ) : (
         <>
           {used.map(row)}
+          {reads.length > 0 ? <Hint>Observed reads have estimated sizes and are shown outside the provider totals.</Hint> : null}
           {tail.length > 0 ? <div className="mx-2 my-1 border-t border-border" /> : null}
           {tail.map(row)}
           {deferred.length > 0 ? (
@@ -102,7 +118,7 @@ function Body({ session, ctx }: { session: SessionSnapshot; ctx: SessionContext 
         </span>
         <CompactButton threadId={session.threadId} disabled={session.running} />
       </div>
-      <EntriesDialog category={detail} hostId={session.hostId} onClose={() => setDetail(null)} />
+      <EntriesDialog category={detail} hostId={session.hostId} onClose={() => setDetailId(null)} />
     </div>
   );
 }
@@ -156,6 +172,7 @@ const INLINE_ROWS = 8;
 
 function CategoryRow({
   category,
+  fileCount,
   color,
   windowTokens,
   hostId,
@@ -164,6 +181,7 @@ function CategoryRow({
   onShowAll,
 }: {
   category: SessionCategory;
+  fileCount?: string;
   color: string;
   windowTokens: number;
   hostId: string | null;
@@ -175,6 +193,8 @@ function CategoryRow({
   const hollow = category.kind === "free" || category.kind === "reserved";
   const label = displayCategoryLabel(category);
   const help = CATEGORY_HELP[label];
+  const observedOnly = label === "Files read";
+  const count = fileCount ?? (hasEntries ? category.entries.length : null);
   const content = (
     <>
       <span
@@ -188,20 +208,20 @@ function CategoryRow({
         >
           {label}
         </span>
+        {count !== null ? (
+          <span className="shrink-0 text-[11px] text-muted-foreground">{count}</span>
+        ) : null}
         {hasEntries ? (
-          <>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{category.entries.length}</span>
             <Icon
               name="ChevronRight"
               className={cn("size-3 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-90")}
               aria-hidden
             />
-          </>
         ) : null}
       </span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{formatTokens(category.tokens)}</span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">{observedOnly ? "≈" : ""}{formatTokens(category.tokens)}</span>
       <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
-        {category.kind === "deferred" ? "—" : formatPercent(category.tokens / windowTokens)}
+        {category.kind === "deferred" ? "—" : `${observedOnly ? "≈" : ""}${formatPercent(category.tokens / windowTokens)}`}
       </span>
     </>
   );
@@ -238,9 +258,9 @@ function InlineEntries({ category, hostId, onShowAll }: { category: SessionCateg
       {entries.slice(0, INLINE_ROWS).map((entry) => (
         <div key={entry.id} className="flex h-5 items-center gap-2 pr-2 text-[11px] text-muted-foreground pointer-coarse:h-8" title={entry.label}>
           <span className="min-w-0 flex-1 truncate">
-            <EntryLabel category={category} label={entry.label} hostId={hostId} />
+            <EntryLabel category={category} entry={entry} hostId={hostId} />
           </span>
-          <span className="shrink-0 tabular-nums">{formatTokens(entry.tokens)}</span>
+          <span className="shrink-0 tabular-nums">{entry.source === "read" ? "≈" : ""}{formatTokens(entry.tokens)}{entry.source === "read" ? " · read" : ""}</span>
         </div>
       ))}
       {rest > 0 ? (
@@ -258,15 +278,17 @@ function InlineEntries({ category, hostId, onShowAll }: { category: SessionCateg
 }
 
 /** 条目名称: 记忆文件是可点开预览的链接 (下划线), MCP 工具显示"工具名 + 所属 server", 其余原样 */
-function EntryLabel({ category, label, hostId, onNavigate }: { category: SessionCategory; label: string; hostId: string | null; onNavigate?: () => void }) {
-  if (category.label === "Memory files" && hostId && label.startsWith("/")) {
+function EntryLabel({ category, entry, hostId, onNavigate }: { category: SessionCategory; entry: SessionCategory["entries"][number]; hostId: string | null; onNavigate?: () => void }) {
+  const { label } = entry;
+  const path = entry.path ?? (category.label === "Memory files" && label.startsWith("/") ? label : null);
+  if (hostId && path) {
     return (
       <FileLink
-        target={{ kind: "host", hostId, path: label }}
+        target={{ kind: "host", hostId, path }}
         className="text-foreground/80 underline decoration-muted-foreground/60 underline-offset-2 hover:text-foreground"
         onClick={onNavigate}
       >
-        {memoryName(label)}
+        {entry.path ? label : memoryName(label)}
       </FileLink>
     );
   }
@@ -330,9 +352,9 @@ function EntriesDialog({ category, hostId, onClose }: { category: SessionCategor
               {entries.map((entry) => (
                 <div key={entry.id} className="flex min-h-7 items-center gap-3 py-0.5 text-sm pointer-coarse:min-h-9" title={entry.label}>
                   <span className="min-w-0 flex-1 truncate">
-                    <EntryLabel category={category} label={entry.label} hostId={hostId} onNavigate={onClose} />
+                    <EntryLabel category={category} entry={entry} hostId={hostId} onNavigate={onClose} />
                   </span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">{formatTokens(entry.tokens)}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">{entry.source === "read" ? "≈" : ""}{formatTokens(entry.tokens)}{entry.source === "read" ? " · read" : ""}</span>
                 </div>
               ))}
               {entries.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No matches</p> : null}

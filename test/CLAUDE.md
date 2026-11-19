@@ -4,7 +4,8 @@
 ## 成员清单
 - usage.test.ts 验证用量口径、缓存与官方分类。fixtures/ 提供脱敏的用量样本。
 - context-files.test.ts 验证文件发现、层级和已加载状态。
-- context-estimate.test.ts 使用合成事件验证估算范围、子项与总量对齐。
+- context-estimate.test.ts 用合成事件验证读取追踪、压缩重置、文件去重及预算对齐。
+- context-host.test.ts 用临时文件和符号链接验证宿主七层扫描。
 - lsof.test.ts 验证监听端口解析与进程归属。
 
 ## 边界

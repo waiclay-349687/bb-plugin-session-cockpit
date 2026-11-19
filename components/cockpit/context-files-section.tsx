@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 data.ts 的 useContextFiles (工作区的上下文文件: 层级、有无改动、导入) 与 useSession (官方上下文明细里的 Memory files 条目 = "已加载"的唯一依据); 依赖 lib/context-files.ts 的合并、分层、就地筛选与分组;
+ * [INPUT]: 依赖 data.ts 的 useContextFiles (工作区的上下文文件: 层级、有无改动、导入) 与 useSession (官方、启动估算和观测读取的实时统计); 依赖 lib/context-files.ts 的合并、分层、就地筛选与分组;
  *          依赖宿主的 useBbNavigate (在 bb 的文件面板里预览 / 用外部编辑器打开)、experimental_useCanOpenFileExternally、copyToClipboard 与脚手架 Dialog
  * [OUTPUT]: 对外提供 ContextFilesSection: Workspace 组里的 Context files 项。收起 = 一行 (已加载数 · 总数, 不知道已加载时只写总数); 点开 = 每个有文件的层级一行; 层级再点开 = 它的文件 (超过 8 个时只就地列已加载与有改动的, 其余进可搜索的弹层)
  * [POS]: components/cockpit 的"哪些文件在给 agent 定规矩"入口 (词汇见 GLOSSARY.md); 消费者: cockpit.tsx; 与 context-section.tsx 的边界: 那边按占用多少列出上下文明细里 Memory files 分类的条目, 这里按层级列出磁盘上全部的上下文文件, 已加载只是其中一个标记
@@ -22,30 +22,30 @@ import {
   groupByLevel,
   groupByTopDir,
   inlineSelection,
-  loadedEntries,
+  fileUsageSummary,
   mergeLoaded,
   relativePath,
-  summarize,
   type ContextFileView,
   type ContextLevel,
   type DirGroup,
   type LevelGroup,
 } from "../../lib/context-files";
-import { formatTokens } from "../../lib/format";
+import { formatPercent, formatTokens } from "../../lib/format";
 import type { SectionProps } from "./cockpit";
 import { useContextFiles, useSession } from "./data";
 import { CardRow, Collapse, Dot, Hint, MenuItem, SectionBody, SectionRow } from "./rows";
 
 export function ContextFilesSection({ threadId, open, onToggle }: SectionProps) {
   const result = useContextFiles(threadId, open).data;
-  const session = useSession(threadId).data;
+  const session = useSession(threadId, open).data;
   const files = result?.files;
-  const context = session?.context;
-  const views = useMemo(() => mergeLoaded(files ?? [], loadedEntries(context)), [files, context]);
+  const stats = session?.contextFiles;
+  const views = useMemo(() => mergeLoaded(files ?? [], stats?.entries ?? null), [files, stats]);
   const hostId = result?.hostId ?? null;
   // 没有任何上下文文件 (或线程还没有工作区) 就不占一行
   if (!hostId || views.length === 0) return null;
-  const summary = summarize(views);
+  const summary = stats ? fileUsageSummary(stats, session?.context?.windowTokens ?? 0) : null;
+  const share = summary?.ratio == null ? "" : ` · ${summary.estimated ? "≈" : ""}${formatPercent(summary.ratio)}`;
   return (
     <div>
       <SectionRow
@@ -54,16 +54,22 @@ export function ContextFilesSection({ threadId, open, onToggle }: SectionProps) 
         open={open}
         onToggle={onToggle}
         // 摘要要短: 不知道已加载时只写总数, 不写 "0 loaded"
-        summary={summary.loaded === null ? String(summary.total) : `${summary.loaded} loaded · ${summary.total}`}
+        summary={summary ? `${summary.count} loaded${share}` : String(views.length)}
       />
       <SectionBody open={open}>
-        <Body views={views} hostId={hostId} loadedKnown={summary.loaded !== null} breakdownEstimated={context?.breakdownEstimated} />
+        <Body views={views} hostId={hostId} basis={stats?.basis} />
       </SectionBody>
     </div>
   );
 }
 
-function Body({ views, hostId, loadedKnown, breakdownEstimated }: { views: ContextFileView[]; hostId: string; loadedKnown: boolean; breakdownEstimated?: boolean }) {
+const FILE_BASIS_HINT = {
+  official: "Loaded from the provider snapshot and file reads since the last context reset. Observed read sizes are estimated.",
+  estimated: "Loaded status estimated from startup rules and file reads since the last context reset.",
+  observed: "Based on file reads since the last context reset. The provider has not reported loaded files.",
+};
+
+function Body({ views, hostId, basis }: { views: ContextFileView[]; hostId: string; basis?: keyof typeof FILE_BASIS_HINT }) {
   // 层级的展开状态只留在组件里: 它是"这一眼想看哪层", 不值得记进偏好
   const [expanded, setExpanded] = useState<ContextLevel[]>([]);
   const [dialogLevel, setDialogLevel] = useState<ContextLevel | null>(null);
@@ -80,7 +86,7 @@ function Body({ views, hostId, loadedKnown, breakdownEstimated }: { views: Conte
           onShowAll={() => setDialogLevel(group.level)}
         />
       ))}
-      {loadedKnown ? null : <Hint>{breakdownEstimated ? "Loaded: unknown · no provider breakdown" : "Loaded: unknown · no context breakdown"}</Hint>}
+      <Hint>{basis ? FILE_BASIS_HINT[basis] : "Loaded: unknown"}</Hint>
       <FilesDialog group={groups.find((group) => group.level === dialogLevel) ?? null} hostId={hostId} onClose={() => setDialogLevel(null)} />
     </div>
   );
@@ -100,8 +106,8 @@ function fileMarks(file: ContextFileView): ReactNode {
   if (file.loaded !== true && !file.changed) return null;
   return (
     <>
-      {file.loaded === true && file.tokens !== null ? <span>{formatTokens(file.tokens)}</span> : null}
-      {file.loaded === true ? <Dot color="var(--success)" label="Loaded in this conversation" /> : null}
+      {file.loaded === true && file.tokens !== null ? <span>{file.source && file.source !== "official" ? "≈" : ""}{formatTokens(file.tokens)}</span> : null}
+      {file.loaded === true ? <Dot color="var(--success)" label={file.source === "read" ? "Read since last context reset" : file.source === "startup" ? "Estimated startup file" : "Loaded in provider snapshot"} /> : null}
       {file.changed ? <ChangedMark /> : null}
     </>
   );
@@ -136,7 +142,7 @@ function Level({ group, hostId, open, onToggle, onShowAll }: { group: LevelGroup
         trailing={
           <>
             <span>{group.total}</span>
-            {group.loaded ? <span className="text-muted-foreground">· {group.loaded} loaded</span> : null}
+            {group.loaded !== null ? <span className="text-muted-foreground">· {group.loaded} loaded</span> : null}
             {group.changed > 0 ? <ChangedMark /> : null}
             <Icon name="ChevronRight" className={cn("size-3 text-muted-foreground transition-transform duration-150", open && "rotate-90")} aria-hidden />
           </>
