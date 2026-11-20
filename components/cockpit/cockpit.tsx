@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 prefs.ts 的顺序、语言覆盖和各板块组件
  * [OUTPUT]: 提供 Cockpit：桌面卡片和手机横幅共用的有序板块树，以及 SectionProps。
- * [POS]: 按用户顺序渲染，仅为相邻且同语言的同组板块共享标题。
+ * [POS]: 按用户顺序渲染，四个顶层组 (Environment / Progress / Usage / Workspace，GROUP_OF)，仅为相邻且同语言的同组板块共享标题。
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { effectiveSectionLanguage } from "../../lib/cockpit-prefs";
@@ -37,10 +37,10 @@ const SECTIONS: Record<SectionId, ComponentType<SectionProps>> = {
 };
 
 const GROUP_OF = {
-  environment: null, progress: "progress", context: "usage", usage: "usage",
+  environment: "environment", progress: "progress", context: "usage", usage: "usage",
   servers: "workspace", scripts: "workspace", contextFiles: "workspace",
   connectors: "workspace", sideChats: "workspace",
-} as const satisfies Record<SectionId, "progress" | "usage" | "workspace" | null>;
+} as const satisfies Record<SectionId, "environment" | "progress" | "usage" | "workspace">;
 
 type Group = { title: (typeof GROUP_OF)[SectionId]; language: Language; sections: SectionId[] };
 

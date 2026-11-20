@@ -1,7 +1,8 @@
 /**
  * [INPUT]: 只依赖语言内置能力; 输入是 bb 的环境 / 项目 / 机器 DTO 与 bb--git 插件 status 行里用得到的字段
- * [OUTPUT]: 对外提供 environmentInfo (归一成 Environment 分区要显示的信息, 不存在的项直接没有字段)、gitWorkState (工作区干净 / n 个改动)、repositoryName (remote → owner/repo)、splitPath (路径前段可截断、末段完整)
- * [POS]: lib 的环境领域核心, 无 IO; 消费者: server.ts (environment RPC)、components/cockpit/environment-section.tsx; 与 context-files.ts 的边界: 那边管上下文文件, 这里只管"线程跑在哪"
+ * [OUTPUT]: 对外提供 environmentInfo (归一成 Environment 分区要显示的信息, 不存在的项直接没有字段)、gitWorkState (工作区干净 / n 个改动, 带新增 / 删除行数)、repositoryName (remote → owner/repo)、splitPath (路径前段可截断、末段完整)、tildePath (家目录缩成 ~);
+ *           分支浮层的解析: parseWorktreeList / defaultBranchName / buildBranches / filterBranches（具体改动交给 bb 官方 diff, 这里不解析文件清单）
+ * [POS]: lib 的环境领域核心, 无 IO; 消费者: server.ts (environment RPC)、host.ts (listBranches: 只读 git 的输出交给这里解析)、components/cockpit/environment-section.tsx; 与 context-files.ts 的边界: 那边管上下文文件, 这里只管"线程跑在哪"
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 
@@ -102,7 +103,7 @@ export type GitStatusRow =
   | {
       outcome: "available";
       workspace: {
-        workingTree: { fileCount: number; hasUncommittedChanges: boolean };
+        workingTree: { fileCount: number; hasUncommittedChanges: boolean; insertions?: number; deletions?: number };
         checkout: { kind: "branch"; branchName: string } | { kind: "detached" | "unborn" | "unknown"; branchName?: string | null };
       };
     }
@@ -110,7 +111,7 @@ export type GitStatusRow =
 
 export type GitWorkState =
   | { kind: "clean"; branch: string | null; detached: boolean }
-  | { kind: "changed"; count: number; branch: string | null; detached: boolean };
+  | { kind: "changed"; count: number; insertions: number; deletions: number; branch: string | null; detached: boolean };
 
 /** 读不到 (插件没装、非 git、还没算出来) 时返回 null: 界面只去掉状态提示, 分支回落到环境记录的 branchName */
 export function gitWorkState(row: GitStatusRow | null | undefined): GitWorkState | null {
@@ -119,7 +120,7 @@ export function gitWorkState(row: GitStatusRow | null | undefined): GitWorkState
   const branch = checkout.branchName ?? null;
   const detached = checkout.kind === "detached";
   return workingTree.hasUncommittedChanges || workingTree.fileCount > 0
-    ? { kind: "changed", count: workingTree.fileCount, branch, detached }
+    ? { kind: "changed", count: workingTree.fileCount, insertions: workingTree.insertions ?? 0, deletions: workingTree.deletions ?? 0, branch, detached }
     : { kind: "clean", branch, detached };
 }
 
@@ -132,4 +133,73 @@ export function splitPath(path: string): { head: string; tail: string } {
   const cut = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
   if (cut <= 0 || cut === trimmed.length - 1) return { head: "", tail: trimmed };
   return { head: trimmed.slice(0, cut + 1), tail: trimmed.slice(cut + 1) };
+}
+
+/** 家目录缩成 ~：macOS 的 /Users/<名>、Linux 的 /home/<名>、Windows 的 C:\Users\<名>；其余原样 */
+export function tildePath(path: string): string {
+  return path.replace(/^(?:\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)(?=$|[\\/])/, "~");
+}
+
+/** 分支浮层里的一条 */
+export interface BranchEntry {
+  name: string;
+  current: boolean;
+  isDefault: boolean;
+  /** 这个分支在另一个 worktree 里检出时的路径（当前目录检出的不算） */
+  worktreePath: string | null;
+}
+
+/** `git worktree list --porcelain` → 每个 worktree 的路径与检出的分支（游离 HEAD 时为 null） */
+export function parseWorktreeList(output: string): { path: string; branch: string | null }[] {
+  const list: { path: string; branch: string | null }[] = [];
+  let current: { path: string; branch: string | null } | null = null;
+  for (const line of output.split("\n")) {
+    if (line.startsWith("worktree ")) {
+      current = { path: line.slice("worktree ".length), branch: null };
+      list.push(current);
+    } else if (current && line.startsWith("branch ")) {
+      current.branch = line.slice("branch ".length).replace(/^refs\/heads\//, "");
+    }
+  }
+  return list;
+}
+
+/**
+ * 默认分支：远端 HEAD 指向的（origin/main → main）；读不到时本地有 main 就是 main，再看 master；都没有为 null。
+ * 远端 HEAD 指向的分支本地没有时也认它（浮层里只是不会出现那一条）。
+ */
+export function defaultBranchName(originHead: string | null | undefined, local: readonly string[]): string | null {
+  const remote = originHead?.trim();
+  if (remote) return remote.replace(/^[^/]+\//, "");
+  return ["main", "master"].find((name) => local.includes(name)) ?? null;
+}
+
+/**
+ * 浮层的分支清单：当前分支置顶，其次默认分支，再是在别的 worktree 里检出的，其余按传入顺序（最近提交在前）。
+ * 当前目录检出的分支不算“有独立 worktree”。
+ */
+export function buildBranches(input: {
+  refs: readonly string[];
+  current: string | null;
+  defaultBranch: string | null;
+  worktrees: readonly { path: string; branch: string | null }[];
+  root: string;
+}): BranchEntry[] {
+  const norm = (p: string) => p.replace(/[\\/]+$/, "");
+  const elsewhere = new Map(input.worktrees.filter((w) => w.branch && norm(w.path) !== norm(input.root)).map((w) => [w.branch!, w.path]));
+  const entries = input.refs.map((name) => ({
+    name,
+    current: name === input.current,
+    isDefault: name === input.defaultBranch,
+    worktreePath: name === input.current ? null : elsewhere.get(name) ?? null,
+  }));
+  const rank = (e: BranchEntry) => (e.current ? 0 : e.isDefault ? 1 : e.worktreePath ? 2 : 3);
+  return entries.map((e, i) => ({ e, i })).sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i).map(({ e }) => e);
+}
+
+/** 浮层搜索：空格分词、每个词都要出现在分支名里（不分大小写）；空查询给全部 */
+export function filterBranches(entries: readonly BranchEntry[], query: string): BranchEntry[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [...entries];
+  return entries.filter((e) => words.every((w) => e.name.toLowerCase().includes(w)));
 }

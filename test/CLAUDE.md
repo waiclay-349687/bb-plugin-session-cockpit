@@ -11,7 +11,7 @@
 - context-files.test.ts 验证文件发现、层级和已加载状态。
 - context-estimate.test.ts 用合成事件验证读取追踪、压缩重置、文件去重及预算对齐。
 - context-host.test.ts 用临时文件和符号链接验证宿主七层扫描。
-- environment.test.ts 用本机真实环境样本验证环境类型、remote 归一、个人工作区与非 git 降级、git 状态与路径切分。
+- environment.test.ts 用脱敏的环境样本验证环境类型、remote 归一、个人工作区与非 git 降级、git 状态（含新增 / 删除行数）、路径切分与 ~ 缩写，以及分支浮层的 worktree 解析、默认分支推断、排序与标记、搜索过滤。
 - lsof.test.ts 验证监听端口解析与进程归属。
 
 ## 边界

@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract、zod, 以及 contract.ts 的 listenerSchema 与 contextFileSchema
+ * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract、zod, 以及 contract.ts 的 listenerSchema、contextFileSchema 与 branchListSchema
  * [OUTPUT]: 对外提供 rpcContract 与 SessionSnapshot / EnvironmentResult / ServersResult / ContextFilesResult / ProjectScript / SideChat 类型: 前端 ↔ 后端的 RPC 契约，含语言设置及上下文文件来源
  * [POS]: 插件根的前后端共享契约 (前端 experimental_useRpcQuery 需要运行时契约对象, 故不能留在 server.ts); 消费者: server.ts (注册 handler)、components/cockpit/data.ts (读取); 与 contract.ts 的边界: contract.ts 只管 server ↔ 宿主机
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
@@ -7,7 +7,7 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { LANGUAGE_MODES } from "./lib/i18n";
-import { contextFileSchema, listenerSchema } from "./contract";
+import { branchListSchema, contextFileSchema, listenerSchema } from "./contract";
 
 const threadInput = z.object({ threadId: z.string().min(1) }).strict();
 const projectInput = z.object({ projectId: z.string().min(1) }).strict();
@@ -150,6 +150,12 @@ export const rpcContract = defineRpcContract({
   environment: {
     input: threadInput,
     output: environmentSchema,
+    tags: ({ threadId }) => [`environment:${threadId}`],
+  },
+  /** 分支浮层：这条线程所在仓库的本地分支（只在打开浮层时读） */
+  branches: {
+    input: threadInput,
+    output: branchListSchema,
     tags: ({ threadId }) => [`environment:${threadId}`],
   },
   contextFiles: {

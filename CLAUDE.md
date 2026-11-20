@@ -13,8 +13,8 @@ docs/: 交接说明 HANDOFF.md（现状、未验证项、取舍、踩过的坑�
 <config>
 package.json: 插件清单（bb.server / bb.app / bb.host / branding）与 npm 脚本
 rpc.ts: 前端 ↔ 后端 RPC 契约（含 language 与 setLanguage、environment 环境信息），breakdownEstimated 标记插件估算的分类，contextFiles 记录文件统计及来源（前端需要运行时契约对象，故独立于 server.ts）
-contract.ts: 后端 ↔ 宿主机 RPC 契约（listListeners / stopListener / listContextFiles）
-server.ts: 后端入口；host.ts: 宿主入口（lsof 发现端口；git ls-files / git status 与读文件系统发现上下文文件，只读）；app.tsx: 前端注册
+contract.ts: 后端 ↔ 宿主机 RPC 契约（listListeners / stopListener / listContextFiles / listBranches）
+server.ts: 后端入口；host.ts: 宿主入口（lsof 发现端口；git ls-files / git status 与读文件系统发现上下文文件；for-each-ref / worktree list 列本地分支；均只读）；app.tsx: 前端注册
 GLOSSARY.md: 领域词汇（上下文文件、层级、已加载 / 有改动、组 / 项），界面文案与代码命名以它为准
 PLUGIN_OVERVIEW.md: 商店详情文案，与 bb.description 保持一致
 </config>
@@ -32,7 +32,7 @@ build: npm run build（= bb plugin build）
 服务端 language 支持 auto / en / zh。浏览器本地存储仅用于初始化镜像，界面由 language RPC 持续同步；分类键和文件元数据保持原值。
 插件 kv 里的 `scripts:<projectId>` 是用户数据，改结构需兼容旧值（读取时 zod 校验，坏值回落空列表）。
 浏览器偏好存 localStorage `bb-plugin-session-cockpit:prefs:v7`，记录板块顺序、独立语言、显隐与展开状态、显示参数及界面优化。读取时从 v6 / v5 / v4 迁移，补齐缺少的板块并校验显示参数。
-Environment 项跨插件只读 bb 内置 `bb--git` 插件的 `status` keyed RPC（只抄用到的字段）；读不到时只去掉"无改动 / n 项有改动"提示，分支回落到环境记录。
+Environment 是卡片里的独立顶层分组（与 Progress / Usage / Workspace 平级，宿主槽位必填的 Session 标题由 host-styles.ts 隐藏，手机横幅照常）。它跨插件只读 bb 内置 `bb--git` 插件的 `status` keyed RPC（只抄用到的字段，含新增 / 删除行数），读不到时只去掉改动数，分支回落到环境记录。改动行点击后用 `usePanelTabs` + `selectTab` 选中 bb--git 的 Diff 标签（pluginId `bb--git`、tab id `diff`），找不到时提示 ⌘D；本插件不重做文件清单。分支浮层只读（复制分支名 / 工作树路径），不切换、不新建分支。
 Progress 通过 `worktree-lineage` 的 `briefing` RPC 读已保存的速览，概括、阶段标题与细则不论什么语言都原样显示（与对方的悬停卡片同一份，绝不换成占位字）；板块自己的文案用板块有效语言。设置页改 Progress 的语言时调用对方的 `setBriefingConfig({ language })` 同步速览生成语言；点“重新生成”时调用 `regenerateBriefing({ threadId, language })`，按板块有效语言立即重写，按返回的 status 用板块语言提示结果。设置页通过 `briefingConfig` / `setBriefingConfig` 编辑该插件持有的生成配置。对方缺席或接口不兼容时显示配置不可用，其他设置继续工作。
 桌面卡片依赖 bb 实验功能 `threadContextCard` 且卡片处于固定状态（`threadContextCard.pinned`）；手机与窄窗格走横幅，不依赖该实验。
 L3 豁免（零适配逻辑的脚手架基础组件）：components/ui/button.tsx、components/ui/card.tsx、components/ui/checkbox.tsx、components/ui/dialog.tsx、components/ui/input.tsx、components/ui/icon.tsx、components/ui/motion.ts、components/ui/coarse-pointer-sizing.ts、components/ui/overlay-trigger.ts、components/ui/responsive-overlay.tsx、components/ui/hooks/use-compact-viewport.tsx、components/ui/hooks/use-media-query.ts、components/ui/hooks/use-pointer-coarse.ts、hooks/useBrowserDimmingModal.ts、lib/utils.ts、lib/portal-scope.ts

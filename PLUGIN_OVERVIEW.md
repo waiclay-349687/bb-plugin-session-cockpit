@@ -6,10 +6,10 @@ in place.
 
 ## What you get
 
-- **Environment**: where this thread runs — one row with the project name;
-  open it for the repository, the kind (Worktree, Project checkout, Personal
-  workspace), the branch with a clean or changed-files hint, the path with a
-  copy button, and a shortcut to start a new thread in the same environment.
+- **Environment**: where this thread runs, as its own group of four rows —
+  the project name (with a new-thread shortcut on hover), the path (hover for
+  the full path, click to copy), a searchable read-only branch list, and
+  uncommitted changes as green `+N` and red `−M` that open bb's Diff panel.
 - **Context files**: every CLAUDE.md, AGENTS.md, rule and memory file that
   steers the agent, grouped by level (Global, Parent, Project, Modules, Local,
   Rules, Memory), with imports shown under the file that pulls them in. A dot

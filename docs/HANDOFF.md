@@ -9,14 +9,24 @@
 - 门禁：`npm run check`（类型检查 + 单测 + 构建）全部通过；2026-11-19 Context files 这一轮收尾时是 37 项单测，其中 18 项是 `test/context-files.test.ts`（同一时间另有会话在改 Limits 相关代码，总数以实际运行为准）。
 - 依赖的 bb 设置：实验开关 `threadContextCard` 已打开；卡片固定偏好 `threadContextCard.pinned` 为 true。
 
+## Environment 独立分组（2026-11-20）
+
+用户给了当前 Environment 与 Synara 的 Environment 分组 / 分支浮层截图，要求改成平级顶层分组、固定四行。
+
+- **结构**：`cockpit.tsx` 的 `GROUP_OF.environment = "environment"`，Environment 与 Progress / Usage / Workspace 平级；宿主槽位必填的 `Session` 标题由 `host-styles.ts` 的 CSS 隐藏（自检 `group-headings`），手机横幅不变。Choose details 的显隐、排序与板块独立语言照常适用。
+- **四行**（`environment-section.tsx`）：名称（悬停出「在此环境新建线程」）、路径（`tildePath` + 中间省略，整行 `title` 是完整路径，点击复制）、分支（Radix Popover 可搜索浮层，打开时才经 `branches` RPC → 宿主 `listBranches` 只读 git 列本地分支，最多 200 条，当前 / 默认 / 工作树标记）、改动（`+N −M` 用宿主的 `--diff-added / --diff-removed`，点击 `selectTab` 选中 bb--git 的 Diff 标签）。
+- **取舍**：分支浮层只读（复制分支名 / 工作树路径），不切换、不新建分支——切换会在 agent 正在用的目录底下换代码，bb 的环境记录也会对不上。改动行不做文件清单（用户明确要求交给 bb 官方 Diff）。宿主卡片顶部 bb 自带的 `Changes` 是整条分支相对基线的改动，本分组的「改动」只算未提交，悬停提示里写明「Uncommitted: n files」。
+- **在界面上验证过**（无头 2×，1600 宽）：干净的 worktree 与有 16 个未提交文件的项目目录；分支浮层的搜索、标记与右缘对齐；点改动行打开 Diff 面板（All changes）；只把 Environment 切中文（环境 / 改动 / 搜索分支… / 当前 / 工作树）；深色主题。
+- **顺手修的**：`test/environment.test.ts` 与本文里原有的私有项目名换成虚构名。
+
 ## Environment 项与微动效（2026-11-19，未提交）
 
-背景：输入框底栏去掉了项目 / 工作区 / Worktree / 分支 / 「在此环境新建线程」，这些信息要落到右上角卡片里（参照 Claude Desktop 右上角 `Environment › Reader-Monorepo` 的层次）。
+背景：输入框底栏去掉了项目 / 工作区 / Worktree / 分支 / 「在此环境新建线程」，这些信息要落到右上角卡片里（参照 Claude Desktop 右上角 `Environment › <项目名>` 的层次）。
 
 - **改造前**：卡片里没有任何环境信息（只有 bb 自带的 Parent / Changes 行和 Progress / Usage / Workspace 三组）；`session` 快照里虽有 `environmentId / environmentPath`，界面没用。
 - **新增**：`lib/environment.ts`（纯逻辑，7 项单测）+ 服务端 `environment` RPC（环境 / 项目 / 机器三份 DTO 归一，tag `environment:<threadId>`，回合结束时失效）+ `components/cockpit/environment-section.tsx`。桌面用 `experimental_threadContextCardRow` 注册成卡片顶部的无标题行（`2_environment` 组，在 Parent 之后、Changes 之前），不是带组名的分区（行名就是 Environment，再加组名会重复）；横幅里排在所有组之前。分支与改动数跨插件只读 `bb--git` 的 `status`，只在展开时订阅。
 - **微动效**：`rows.tsx` 新增 `PRESSABLE` / `CHEVRON_MOTION` / `IconButton` / `CopyButton`，各分区的箭头与可点行统一改用；可点行按下 scale 0.97（用户这次明确要求，取代旧的"整行不缩放"约定）。
-- **在界面上验证过**（无头浏览器 1600 宽、900 宽横幅）：worktree（`reader`，Repository `ReadBreakthrough/Reader-Monorepo`，干净）、项目目录（Breakthrough-，16 个改动；后来把状态压短成绿点 / 橙色 `M16`）、长分支 worktree、个人工作区（只有 Personal workspace 与路径）；复制图标交叉淡入对勾、剪贴板内容为完整路径；折叠高度 138→0 平滑、箭头 200ms 旋转；浅色主题；减少动态效果时过渡全部为 none；新建线程落到新建页并预选项目、Reuse 该环境与分支（没有发送）；控制台 0 报错。
+- **在界面上验证过**（无头浏览器 1600 宽、900 宽横幅）：worktree（`<项目 A>`，Repository `<owner>/<repo>`，干净）、项目目录（`<项目 B>`，16 个改动；后来把状态压短成绿点 / 橙色 `M16`）、长分支 worktree、个人工作区（只有 Personal workspace 与路径）；复制图标交叉淡入对勾、剪贴板内容为完整路径；折叠高度 138→0 平滑、箭头 200ms 旋转；浅色主题；减少动态效果时过渡全部为 none；新建线程落到新建页并预选项目、Reuse 该环境与分支（没有发送）；控制台 0 报错。
 - **没验证**：多台机器时的机器名（本机只有一台 host）；环境未就绪时的说明文字；中文界面下的实际排版（词条已加，单测覆盖双语纯度）。
 
 ## 第三轮改动（2026-11-18，在 worktree-lineage 的对话里做的，未提交）

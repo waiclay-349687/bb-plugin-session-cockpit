@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery, 依赖 rpc.ts 契约
- * [OUTPUT]: 对外提供 useSession / useEnvironment / useServers / useContextFiles / useSideChats / useScripts / useNow: 卡片分区的数据入口；会话快照可随展开的文件清单轮询
+ * [OUTPUT]: 对外提供 useSession / useEnvironment / useBranches / useServers / useContextFiles / useSideChats / useScripts / useNow: 卡片分区的数据入口；会话快照可随展开的文件清单轮询
  * [POS]: components/cockpit 的数据层; 消费者: 本目录全部分区; 与 prefs.ts 的边界: 本文件只读服务端数据, 客户端偏好在 prefs.ts
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -72,6 +72,16 @@ export function useEnvironment(threadId: string) {
     contract: rpcContract,
     method: "environment",
     input: { threadId },
+  });
+}
+
+/** 分支浮层的本地分支清单：只在浮层打开时读（宿主跑几条只读 git） */
+export function useBranches(threadId: string, enabled: boolean) {
+  return experimental_useRpcQuery({
+    contract: rpcContract,
+    method: "branches",
+    input: { threadId },
+    enabled,
   });
 }
 

@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 bb.sdk 的 threads (get/context/events)、environments、projects、hosts; 依赖 lib/environment.ts 归一环境信息; 依赖宿主入口 (contract.ts) 发现端口与上下文文件; 依赖 lib/usage.ts 归一用量、lib/context-estimate.ts 追踪已读并估算分类
+ * [INPUT]: 依赖 bb.sdk 的 threads (get/context/events)、environments、projects、hosts; 依赖 lib/environment.ts 归一环境信息; 依赖宿主入口 (contract.ts) 发现端口、上下文文件与本地分支; 依赖 lib/usage.ts 归一用量、lib/context-estimate.ts 追踪已读并估算分类
  * [OUTPUT]: 对外提供插件工厂 (default export): 注册 rpc.ts 契约的全部 handler、线程事件驱动的失效刷新, 服务端语言配置，以及 `bb session-cockpit` CLI
- * [POS]: 插件后端入口; 消费者: components/cockpit/* (经 RPC)、agent (经 CLI); 与 host.ts 的边界: 本文件解析线程→环境→宿主机, host.ts 只在机器上执行 lsof 与读文件系统; 与 rpc.ts 的边界: 契约形状在 rpc.ts, 本文件只实现
+ * [POS]: 插件后端入口; 消费者: components/cockpit/* (经 RPC)、agent (经 CLI); 与 host.ts 的边界: 本文件解析线程→环境→宿主机, host.ts 只在机器上执行 lsof、只读 git 与读文件系统; 与 rpc.ts 的边界: 契约形状在 rpc.ts, 本文件只实现
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { randomUUID } from "node:crypto";
@@ -285,6 +285,11 @@ export default function plugin(bb: BbPluginApi) {
     setLanguage: async ({ language }) => ({ language: languageMode((await settings.experimental_set({ language })).language) }),
     session: ({ threadId }, ctx) => buildSession(threadId, ctx.experimental_signal),
     environment: ({ threadId }, ctx) => buildEnvironment(threadId, ctx.experimental_signal),
+    branches: async ({ threadId }, ctx) => {
+      const { hostId, environmentPath } = await resolveThread(threadId, ctx.experimental_signal);
+      if (!hostId || !environmentPath) return { isGitRepo: false, branches: [], truncated: false };
+      return host.call("listBranches", { root: environmentPath }, { hostId }).catch(() => ({ isGitRepo: false, branches: [], truncated: false }));
+    },
     contextFiles: async ({ threadId }, ctx) => workspaceContextFiles(await resolveThread(threadId, ctx.experimental_signal)),
     servers: ({ threadId }, ctx) => listServers(threadId, ctx.experimental_signal),
     sideChats: ({ threadId }, ctx) => listSideChats(threadId, ctx.experimental_signal),

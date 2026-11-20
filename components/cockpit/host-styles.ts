@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 bb 应用外壳的 DOM 结构 (见 HOOKS 清单)、prefs.ts 的开关和卡片高度、sonner 的 toast
  * [OUTPUT]: 对外提供 mountHostStyles (内容脚本入口)、useHostHealth / recheckHostHealth、repairPrompt 与实时宿主分区标题同步
  * [POS]: 插件对 bb 宿主界面的全部"越界"改动都集中在这里, 与主题无关、任何主题下都生效:
- *        (1) 线程上下文卡片的出入场 (在会话之间切换时不重播入场: 卡片留在原地只换内容)、对话区平滑让位、历史导航条不被挤掉、应用浏览器偏好中的卡片限高 (2) 桌面习惯的箭头光标 (链接留手形、消息正文保留文字光标)。
+ *        (0) 隐藏卡片槽位的 Session 标题, 让卡片里的分组成为顶层分组 (1) 线程上下文卡片的出入场 (在会话之间切换时不重播入场: 卡片留在原地只换内容)、对话区平滑让位、历史导航条不被挤掉、应用浏览器偏好中的卡片限高 (2) 桌面习惯的箭头光标 (链接留手形、消息正文保留文字光标)。
  *        这些规则依赖 bb 未承诺稳定的结构, 所以同文件里带自检: 结构变了就提醒, 并给出修复办法。
  *        消费者: app.tsx (contentScripts.register)、settings-section.tsx
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
@@ -68,7 +68,9 @@ const EASE = "var(--glass-ease, cubic-bezier(0.165, 0.84, 0.44, 1))";
 const HEIGHT_VAR = "--session-cockpit-max-height";
 const CARD_HEIGHT_CSS = `
 [data-scroll-overlay] > [data-thread-context-card]:has([data-cockpit-layout]) { max-height: min(var(${HEIGHT_VAR}), calc(100% - 1.5rem)); }
-[data-thread-context-card-section]:has([data-cockpit-layout]):not(:has([data-cockpit-item])) { display: none; }`;
+[data-thread-context-card-section]:has([data-cockpit-layout]):not(:has([data-cockpit-item])) { display: none; }
+/* 宿主槽位的 "Session" 标题只是 SDK 必填的注册名: 卡片里 Environment / Progress / Usage / Workspace 各有自己的分组标题, 是平级顶层分组, 不再套在 Session 底下 */
+[data-thread-context-card-section]:has([data-cockpit-layout]) > div:has(> h3) { display: none; }`;
 /** 切换会话的瞬间挂在 <html> 上的标记: 这段时间里出现的卡片不做入场动画 */
 const WARM_ATTR = "data-session-cockpit-card-warm";
 const WARM_MS = 700;
@@ -165,6 +167,21 @@ const HOOKS: Hook[] = [
       }
       const native = settings?.querySelector('[data-settings-anchor="Language"]');
       return !native || getComputedStyle(native).display === "none" ? true : "failedLocalizedHeadings";
+    },
+  },
+  {
+    // 与 CARD_HEIGHT_CSS 里隐藏宿主分区标题的规则对应: 结构变了 Session 标题会重新压在 Environment 等分组上方
+    id: "group-headings",
+    label: "checkGroupHeadings",
+    check() {
+      const sections = Array.from(document.querySelectorAll("[data-thread-context-card-section]:has([data-cockpit-layout])"));
+      if (sections.length === 0) return null;
+      return sections.every((section) => {
+        const heading = section.querySelector(":scope > div:has(> h3)");
+        return heading !== null && getComputedStyle(heading).display === "none";
+      })
+        ? true
+        : "failedGroupHeadings";
     },
   },
   {

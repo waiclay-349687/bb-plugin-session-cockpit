@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖宿主机的 lsof / ps / docker (可选) / git (可选) 命令、工作区的 .bb/ports.json (可选) 与 Node child_process/fetch/fs; 依赖 lib/lsof.ts 的解析与归属判定、lib/context-files.ts 的层级判定与导入解析
- * [OUTPUT]: 对外提供宿主入口 (default export): listListeners 列出工作区内进程监听的端口及其归属, stopListener 结束其中可停止的一个, discoverContextFiles 与 listContextFiles 列出工作区的上下文文件 (层级、有无改动、导入、各层级字节数及符号链接目标; 只读)
+ * [OUTPUT]: 对外提供宿主入口 (default export): listListeners 列出工作区内进程监听的端口及其归属, stopListener 结束其中可停止的一个, discoverContextFiles 与 listContextFiles 列出工作区的上下文文件 (层级、有无改动、导入、各层级字节数及符号链接目标; 只读); listBranches (只读 git: 本地分支清单, 标出当前 / 默认 / 在别的 worktree 检出)
  * [POS]: 插件的 bb.host 入口, 在线程所在机器上以完整信任运行; 消费者: server.ts 的 servers/stopServer/contextFiles RPC; 与 server.ts 的边界: 只做本机进程与文件层面的事, 不认识线程与项目
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
 import { hostContract, type ListenerInfo } from "./contract.ts";
+import { buildBranches, defaultBranchName, parseWorktreeList, type BranchEntry } from "./lib/environment.ts";
 import {
   CONTEXT_LEVELS,
   IMPORT_LEVELS,
@@ -383,6 +384,40 @@ export async function discoverContextFiles(rawRoot: string, signal: AbortSignal,
   };
 }
 
+/** 分支浮层最多列多少个本地分支（按最近提交排） */
+const BRANCH_LIMIT = 200;
+
+/**
+ * 本地分支清单（只读）：当前分支、默认分支、在别的 worktree 里检出的分支各自标出。
+ * 不是 git 仓库、或任何一步 git 失败时返回空清单，不抛。
+ */
+async function listBranches(root: string, signal: AbortSignal): Promise<{ isGitRepo: boolean; branches: BranchEntry[]; truncated: boolean }> {
+  const git = (args: string[]) => run("git", ["-C", root, ...args], signal);
+  try {
+    await git(["rev-parse", "--is-inside-work-tree"]);
+  } catch {
+    return { isGitRepo: false, branches: [], truncated: false };
+  }
+  // symbolic-ref 在游离 HEAD 时以 1 退出、没有输出 (run 把它当成空串), 远端没有 HEAD 时同理
+  const [refsOut, current, worktreesOut, originHead] = await Promise.all([
+    git(["for-each-ref", "--sort=-committerdate", `--count=${BRANCH_LIMIT + 1}`, "--format=%(refname:short)", "refs/heads"]).catch(() => ""),
+    git(["symbolic-ref", "--quiet", "--short", "HEAD"]).catch(() => ""),
+    git(["worktree", "list", "--porcelain"]).catch(() => ""),
+    git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).catch(() => ""),
+  ]);
+  const refs = refsOut.split("\n").map((line) => line.trim()).filter(Boolean);
+  const truncated = refs.length > BRANCH_LIMIT;
+  const kept = refs.slice(0, BRANCH_LIMIT);
+  const head = current.trim() || null;
+  // 当前分支不在最近 N 个里时也要列出来
+  if (head && !kept.includes(head)) kept.unshift(head);
+  return {
+    isGitRepo: true,
+    branches: buildBranches({ refs: kept, current: head, defaultBranch: defaultBranchName(originHead, kept), worktrees: parseWorktreeList(worktreesOut), root }),
+    truncated,
+  };
+}
+
 export default experimental_defineHostEntry({
   contract: hostContract,
   handlers: {
@@ -417,6 +452,7 @@ export default experimental_defineHostEntry({
       contextCache.set(root, { at: Date.now(), value });
       return value;
     },
+    listBranches: ({ root }, context) => listBranches(root, context.lifecycle.signal),
     stopListener: async ({ root, pid, port }, context) => {
       // 结束进程前重新扫描并重新判定归属: 只结束"此刻仍在本工作区内监听该端口、且由 agent 或 bb 终端启动"的进程,
       // 防止 pid 复用误杀, 也防止绕过前端直接调用时杀掉 agent 会话或常驻服务

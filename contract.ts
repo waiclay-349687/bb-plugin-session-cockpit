@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk 的 defineRpcContract 与 zod; 依赖 lib/context-files.ts 的层级枚举
- * [OUTPUT]: 对外提供 hostContract: server.ts 与 host.ts 之间的宿主 RPC 契约 (listListeners / stopListener / listContextFiles); listenerSchema 与 contextFileSchema（含各层级字节数及符号链接目标）供 rpc.ts 复用
+ * [OUTPUT]: 对外提供 hostContract: server.ts 与 host.ts 之间的宿主 RPC 契约 (listListeners / stopListener / listContextFiles / listBranches); listenerSchema 与 contextFileSchema（含各层级字节数及符号链接目标）供 rpc.ts 复用
  * [POS]: 插件根的跨进程契约层; 消费者: server.ts (bb.hosts.experimental_client)、host.ts (experimental_defineHostEntry); 与 server.ts 内 rpcContract 的边界: 本契约只走 server↔宿主机, 前端看不到
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -48,6 +48,20 @@ export const contextFileSchema = z.object({
   imports: z.array(z.object({ path: z.string(), name: z.string() })),
 });
 
+/** 分支浮层的一条（形状与 lib/environment.ts 的 BranchEntry 一致） */
+export const branchEntrySchema = z.object({
+  name: z.string(),
+  current: z.boolean(),
+  isDefault: z.boolean(),
+  worktreePath: z.string().nullable(),
+});
+export const branchListSchema = z.object({
+  isGitRepo: z.boolean(),
+  branches: z.array(branchEntrySchema),
+  /** 本地分支多于上限时只列最近提交的那些 */
+  truncated: z.boolean(),
+});
+
 export const hostContract = defineRpcContract({
   listListeners: {
     // 只读、可重放
@@ -63,6 +77,12 @@ export const hostContract = defineRpcContract({
     experimental_retryable: true,
     input: z.object({ root: z.string().min(1) }).strict(),
     output: z.object({ isGitRepo: z.boolean(), files: z.array(contextFileSchema) }),
+  },
+  listBranches: {
+    // 只读、可重放; 不是 git 仓库或 git 出错时返回空列表, 不抛
+    experimental_retryable: true,
+    input: z.object({ root: z.string().min(1) }).strict(),
+    output: branchListSchema,
   },
   stopListener: {
     input: z
