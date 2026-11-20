@@ -6,6 +6,10 @@ in place.
 
 ## What you get
 
+- **Environment**: where this thread runs — one row with the project name;
+  open it for the repository, the kind (Worktree, Project checkout, Personal
+  workspace), the branch with a clean or changed-files hint, the path with a
+  copy button, and a shortcut to start a new thread in the same environment.
 - **Context files**: every CLAUDE.md, AGENTS.md, rule and memory file that
   steers the agent, grouped by level (Global, Parent, Project, Modules, Local,
   Rules, Memory), with imports shown under the file that pulls them in. A dot

@@ -1,13 +1,13 @@
 /**
  * [INPUT]: 后端 language RPC、浏览器初始镜像和宿主语言。
- * [OUTPUT]: 提供挂载时的语言、实时翻译、语言保存与跨标签页同步。
+ * [OUTPUT]: 提供全局与板块独立语言、挂载时的语言、实时翻译、语言保存与跨标签页同步。
  * [POS]: 将服务端配置与 React 和内容脚本共用的语言存储连接起来。
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { toast } from "sonner";
-import { useEffect, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { experimental_useRpcQuery, useRpc } from "@get-bb/plugin-sdk/app";
-import { languageMode, resolveLanguage, textFor, type LanguageMode, type MessageKey } from "../../lib/i18n";
+import { languageMode, resolveLanguage, textFor, type Language, type LanguageMode, type MessageKey } from "../../lib/i18n";
 import { formatTokens, formatCost, formatDuration, formatTtl, formatCountdown, formatAgo } from "../../lib/format";
 import { rpcContract } from "../../rpc";
 
@@ -40,6 +40,13 @@ export const currentText = () => textFor[currentLanguage()];
 
 export function notifyCockpit(kind: "success" | "error", key: MessageKey, args?: Record<string, string | number>) {
   toast[kind](currentText()(key, args), { id: "session-cockpit:notice" });
+}
+
+/** 板块内的通知与面板一同使用有效语言，包括异步动作完成后的提示。 */
+export function useSectionNotice() {
+  const t = useText();
+  return (kind: "success" | "error", key: MessageKey, args?: Record<string, string | number>) =>
+    toast[kind](t(key, args), { id: "session-cockpit:notice" });
 }
 
 function setMode(next: LanguageMode) {
@@ -86,7 +93,18 @@ export function useLanguageMode() {
   };
   return { mode: value, save };
 }
-export const useLanguage = () => useSyncExternalStore(subscribe, currentLanguage, () => "en" as const);
+const SectionLanguage = createContext<Language | undefined>(undefined);
+
+export function SectionLanguageProvider({ lang, children }: { lang: Language; children: ReactNode }) {
+  return <SectionLanguage.Provider value={lang}>{children}</SectionLanguage.Provider>;
+}
+
+export function useLanguage(): Language {
+  const section = useContext(SectionLanguage);
+  const global = useSyncExternalStore(subscribe, currentLanguage, () => "en" as const);
+  return section ?? global;
+}
+
 export const useText = () => textFor[useLanguage()];
 
 const scopedFormats = (language: "en" | "zh") => ({

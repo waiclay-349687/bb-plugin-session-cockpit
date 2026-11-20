@@ -1,38 +1,105 @@
 /**
  * [INPUT]: 依赖 prefs.ts 的 SECTION_DEFS 与 usePrefs、host-styles.ts 的自检结果、脚手架 Checkbox
- * [OUTPUT]: 提供语言选择器及 对外提供 ChooseDetailsSettings (显示哪些分区) 与 HostStylesSettings (宿主样式开关 + 自检状态 + 修复办法)
+ * [OUTPUT]: 提供语言、板块编排、显示参数、宿主样式和自检设置
  * [POS]: components/cockpit 的设置视图; 消费者: app.tsx 的 settingsSection; 与各分区的边界: 卡片高度有限, 开关不放进卡片本身
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { useText, useLanguage, useLanguageMode, notifyCockpit } from "./language";
 import { useEffect, useState } from "react";
 import { experimental_copyToClipboard as copyToClipboard } from "@get-bb/plugin-sdk/app";
+import { DISPLAY_LIMITS, type DisplayKey } from "../../lib/cockpit-prefs";
 import { languageMode } from "../../lib/i18n";
 import { Checkbox } from "@/components/ui/checkbox";
 import { repairPrompt, recheckHostHealth, useHostHealth, useHostSettingsChrome, type HookResult } from "./host-styles";
-import { SECTION_DEFS, usePrefs, type HostStyleBlock } from "./prefs";
+import { SECTION_DEFS, usePrefs, type HostStyleBlock, type SectionId } from "./prefs";
+
+const CONTROL = "rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground";
+const ARROW = "h-7 w-7 rounded-md border border-border text-sm hover:bg-state-hover disabled:opacity-40";
 
 export function ChooseDetailsSettings() {
   const t = useText();
-  const { isHidden, toggleHidden, reset } = usePrefs();
+  const { prefs, isHidden, toggleHidden, move, setSectionLanguage, reset } = usePrefs();
+  const [dragged, setDragged] = useState<SectionId | null>(null);
+  const [over, setOver] = useState<SectionId | null>(null);
   return (
-    <div className="space-y-3" data-cockpit-settings>
+    <section className="space-y-3" data-cockpit-settings>
       <h3 className="text-sm font-medium">{t("chooseDetails")}</h3>
-      <p className="text-sm text-muted-foreground">
-        {t("sectionsHelp")}
-      </p>
-      <div className="space-y-2">
-        {SECTION_DEFS.map((section) => (
-          <label key={section.id} className="flex items-center gap-2 text-sm">
-            <Checkbox checked={!isHidden(section.id)} onCheckedChange={() => toggleHidden(section.id)} />
-            {t(section.label)}
+      <p className="text-sm text-muted-foreground">{t("sectionsHelp")}</p>
+      <ol className="space-y-1.5" aria-label={t("chooseDetails")}>
+        {prefs.order.map((id, index) => {
+          const section = SECTION_DEFS.find(entry => entry.id === id)!;
+          const label = t(section.label);
+          return (
+            <li key={id} data-section-setting={id}
+              className={`flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 ${over === id ? "border-primary bg-state-hover" : "border-border"}`}
+              onDragOver={event => {
+                if (!dragged) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setOver(id);
+              }}
+              onDrop={event => {
+                event.preventDefault();
+                if (dragged) move(dragged, index);
+                setDragged(null);
+                setOver(null);
+              }}
+            >
+              <span className="cursor-grab select-none text-muted-foreground active:cursor-grabbing"
+                draggable aria-hidden title={t("dragSection", { name: label })}
+                onDragStart={event => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", id);
+                  setDragged(id);
+                }}
+                onDragEnd={() => { setDragged(null); setOver(null); }}>
+                ⠿
+              </span>
+              <label className="flex min-w-36 flex-1 items-center gap-2 text-sm">
+                <Checkbox checked={!isHidden(id)} onCheckedChange={() => toggleHidden(id)} />
+                {label}
+              </label>
+              <select className={CONTROL} aria-label={t("sectionLanguage", { name: label })}
+                value={prefs.sectionLanguages[id] ?? "auto"} onChange={event => {
+                  const mode = languageMode(event.target.value);
+                  setSectionLanguage(id, mode === "auto" ? undefined : mode);
+                }}>
+                <option value="auto">{t("followPlugin")}</option>
+                <option value="en">{t("english")}</option>
+                <option value="zh">{t("chinese")}</option>
+              </select>
+              <button type="button" className={ARROW} aria-label={t("moveUp", { name: label })} disabled={index === 0} onClick={() => move(id, index - 1)}>↑</button>
+              <button type="button" className={ARROW} aria-label={t("moveDown", { name: label })} disabled={index === prefs.order.length - 1} onClick={() => move(id, index + 1)}>↓</button>
+            </li>
+          );
+        })}
+      </ol>
+      <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={reset}>{t("reset")}</button>
+    </section>
+  );
+}
+
+export function DisplaySettings() {
+  const t = useText();
+  const { prefs, setDisplay, resetDisplay } = usePrefs();
+  return (
+    <section className="space-y-3" data-cockpit-display>
+      <h3 className="text-sm font-medium">{t("displaySettings")}</h3>
+      {(Object.keys(DISPLAY_LIMITS) as DisplayKey[]).map(key => {
+        const bounds = DISPLAY_LIMITS[key];
+        const value = prefs.display[key];
+        return (
+          <label key={key} className="grid items-center gap-x-3 gap-y-1 text-sm sm:grid-cols-[minmax(9rem,1fr)_minmax(6rem,12rem)_5rem]">
+            <span>{t(key)}</span>
+            <input type="range" name={key} min={bounds.min} max={bounds.max} value={value} onChange={event => setDisplay(key, event.target.valueAsNumber)} />
+            <output className="text-xs tabular-nums text-muted-foreground">
+              {key === "cardHeight" ? t("pixels", { value }) : key === "warningPercent" ? `${value}%` : value}
+            </output>
           </label>
-        ))}
-      </div>
-      <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={reset}>
-        {t("reset")}
-      </button>
-    </div>
+        );
+      })}
+      <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={resetDisplay}>{t("reset")}</button>
+    </section>
   );
 }
 

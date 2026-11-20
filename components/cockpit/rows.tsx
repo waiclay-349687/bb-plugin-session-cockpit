@@ -1,11 +1,12 @@
 /**
- * [INPUT]: 依赖当前语言及 依赖宿主图标 (components/ui/icon) 与 lib/palette.ts 的色调
- * [OUTPUT]: 对外提供 SectionRow / SectionBody (分区展开内容统一缩进到名称线) / Collapse / CardRow (行体主操作 + 箭头菜单) / MenuItem / MenuConfirmItem / MoreRow / Meter / Hint / Dot / toneVar: 卡片与横幅详情共用的行式原语 (触屏下行高 36px、操作常显)
+ * [INPUT]: 依赖当前语言与 useSectionNotice (language.tsx)、宿主图标 (components/ui/icon)、SDK 的 experimental_copyToClipboard、lib/palette.ts 的色调
+ * [OUTPUT]: 对外提供 PRESSABLE / CHEVRON_MOTION (动效类名, 带 motion-reduce) / IconButton / CopyButton (复制 → 对勾交叉过渡) / SectionRow / SectionBody (分区展开内容统一缩进到名称线) / Collapse / CardRow (行体主操作 + 箭头菜单) / MenuItem / MenuConfirmItem / MoreRow / Meter / Hint / Dot / toneVar: 卡片与横幅详情共用的行式原语 (触屏下行高 36px、操作常显)
  * [POS]: components/cockpit 的展示原语层; 尺寸照抄 bb 原生卡片行 (26px 行高、12px 字、14px 灰色图标、右侧灰色等宽数字);
  *        消费者: 本目录各分区; 与 components/ui 的边界: ui 是脚手架通用组件, 本文件只服务卡片
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useText } from "./language";
+import { useSectionNotice, useText } from "./language";
+import { experimental_copyToClipboard as copyToClipboard } from "@get-bb/plugin-sdk/app";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
@@ -19,6 +20,13 @@ import type { Tone } from "../../lib/palette";
 export const EASE = "var(--glass-ease, cubic-bezier(0.165, 0.84, 0.44, 1))";
 const COLLAPSE_MS = 200;
 const FADE_MS = 160;
+/**
+ * 可点控件的统一手感: 悬停底色柔和渐显、按下轻微缩到 0.97、松开回弹; 减少动态效果时全部关掉。
+ * 用 Tailwind v4 的 scale 属性 (不是 transform), 与主题对按钮的 scale 同一属性, 后写的覆盖、不会叠乘。
+ */
+export const PRESSABLE = "transition-[background-color,color,opacity,scale] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
+/** 展开箭头的旋转, 与折叠同为 200ms */
+export const CHEVRON_MOTION = "transition-transform duration-200 ease-out motion-reduce:transition-none";
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
@@ -79,7 +87,7 @@ export const toneVar = (tone: Tone): string =>
   tone === "danger" ? "var(--destructive)" : tone === "warning" ? "var(--warning)" : "var(--muted-foreground)";
 
 /**
- * 卡片行。与 bb 原生行同尺寸; 整行按钮不做按压缩放 (用户主题对按钮有 active 缩放, 宽行缩进观感过猛), 改用按下时背景加深。
+ * 卡片行。与 bb 原生行同尺寸; 可点的行与按钮共用 PRESSABLE (悬停底色渐显、按下 0.97 回弹), 按下时背景也加深。
  *
  * 一行两个点击区 (T3 Code 的做法): 行体执行主操作 onClick; 传了 menu 时右侧多一个独立的箭头按钮,
  * 点它在行下方展开菜单放次要操作。两个区各有自己的悬停底色, 不会点错。
@@ -144,7 +152,7 @@ export function CardRow({
       {onClick ? (
         <button
           type="button"
-          className={cn(inner, "hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:scale-100 active:bg-state-active")}
+          className={cn(inner, PRESSABLE, "hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:bg-state-active")}
           onClick={onClick}
           aria-expanded={expanded}
         >
@@ -158,7 +166,7 @@ export function CardRow({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className={cn("flex w-6 shrink-0 items-center justify-center rounded-r-md text-muted-foreground hover:bg-state-hover hover:text-foreground focus-visible:bg-state-hover focus-visible:outline-none active:scale-100 data-[state=open]:bg-state-active data-[state=open]:text-foreground pointer-coarse:w-9", quietMenu && "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100")}
+              className={cn("flex w-6 shrink-0 items-center justify-center rounded-r-md text-muted-foreground hover:bg-state-hover hover:text-foreground focus-visible:bg-state-hover focus-visible:outline-none data-[state=open]:bg-state-active data-[state=open]:text-foreground pointer-coarse:w-9", PRESSABLE, quietMenu && "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100")}
               aria-label={menuLabel ?? t("moreActions")}
             >
               <Icon name="ChevronDown" className="size-3" aria-hidden />
@@ -170,6 +178,56 @@ export function CardRow({
         </DropdownMenu>
       ) : null}
     </div>
+  );
+}
+
+/** 复制成功后对勾停留多久 */
+const COPIED_MS = 1600;
+
+/**
+ * 行尾的小图标按钮 (复制、新建等次要操作): 24px 方块, 触屏 36px; 手感同 PRESSABLE。
+ */
+export function IconButton({ label, onClick, children, className }: { label: string; onClick: () => void; children: ReactNode; className?: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn("relative flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-state-hover hover:text-foreground focus-visible:bg-state-hover focus-visible:text-foreground focus-visible:outline-none active:bg-state-active pointer-coarse:size-9", PRESSABLE, className)}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 复制按钮: 成功后复制图标缩小淡出、绿色对勾放大淡入 (两个图标叠放交叉过渡, 不是换图标名的硬切), COPIED_MS 后再换回。
+ * 读屏通过 aria-live 播报"已复制"; 写剪贴板失败时走 toast。
+ */
+export function CopyButton({ text, label }: { text: string; label: string }) {
+  const notifyCockpit = useSectionNotice();
+  const t = useText();
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const swap = (shown: boolean) => cn("absolute size-3.5 transition-[opacity,scale] duration-200 ease-out motion-reduce:transition-none", shown ? "scale-100 opacity-100" : "scale-50 opacity-0");
+  return (
+    <IconButton
+      label={copied ? t("copied") : label}
+      onClick={() => {
+        void copyToClipboard({ text }).then((ok) => {
+          if (!ok) return notifyCockpit("error", "copyFailed");
+          setCopied(true);
+          clearTimeout(timer.current);
+          timer.current = setTimeout(() => setCopied(false), COPIED_MS);
+        });
+      }}
+    >
+      <Icon name="Copy" className={swap(!copied)} aria-hidden />
+      <Icon name="Check" className={swap(copied)} style={{ color: "var(--success)" }} aria-hidden />
+      <span className="sr-only" aria-live="polite">{copied ? t("copied") : ""}</span>
+    </IconButton>
   );
 }
 
@@ -216,7 +274,7 @@ export function MoreRow({ count = 0, label, open, onToggle }: { count?: number; 
       leading={
         <Icon
           name="ChevronRight"
-          className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-90")}
+          className={cn("size-3.5 shrink-0 text-muted-foreground", CHEVRON_MOTION, open && "rotate-90")}
           aria-hidden
         />
       }
@@ -234,7 +292,7 @@ export function Meter({ ratio, tone = "normal", className }: { ratio: number; to
   return (
     <span className={cn("block h-1 overflow-hidden rounded-full bg-muted", className)}>
       <span
-        className="block h-full rounded-full transition-[width] duration-300"
+        className="block h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none"
         style={{ width, background: tone === "normal" ? "var(--foreground)" : toneVar(tone), opacity: tone === "normal" ? 0.5 : 1 }}
       />
     </span>
@@ -291,7 +349,7 @@ export function SectionRow({
     <button
       type="button"
       data-cockpit-item=""
-      className="flex h-6.5 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-xs text-foreground hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:scale-100 active:bg-state-active pointer-coarse:h-9"
+      className={cn("flex h-6.5 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-xs text-foreground hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:bg-state-active pointer-coarse:h-9", PRESSABLE)}
       onClick={onToggle}
       aria-expanded={open}
       title={title}
@@ -302,7 +360,7 @@ export function SectionRow({
       <span className={cn("ml-auto flex items-center gap-1 tabular-nums text-muted-foreground", labelFirst ? "shrink-0" : "min-w-0 truncate")}>{summary}</span>
       <Icon
         name="ChevronRight"
-        className={cn("size-3 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-90")}
+        className={cn("size-3 shrink-0 text-muted-foreground", CHEVRON_MOTION, open && "rotate-90")}
         aria-hidden
       />
     </button>

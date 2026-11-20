@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery, 依赖 rpc.ts 契约
- * [OUTPUT]: 对外提供 useSession / useServers / useContextFiles / useSideChats / useScripts / useNow: 卡片分区的数据入口；会话快照可随展开的文件清单轮询
+ * [OUTPUT]: 对外提供 useSession / useEnvironment / useServers / useContextFiles / useSideChats / useScripts / useNow: 卡片分区的数据入口；会话快照可随展开的文件清单轮询
  * [POS]: components/cockpit 的数据层; 消费者: 本目录全部分区; 与 prefs.ts 的边界: 本文件只读服务端数据, 客户端偏好在 prefs.ts
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
@@ -64,6 +64,15 @@ export function useContextFiles(threadId: string, poll: boolean, intervalMs = 30
   });
   usePollWhile(query.refetch, poll, intervalMs);
   return query;
+}
+
+/** 线程跑在哪 (项目 / 仓库 / 类型 / 分支 / 路径): 环境记录很少变, 回合结束时服务端失效刷新 */
+export function useEnvironment(threadId: string) {
+  return experimental_useRpcQuery({
+    contract: rpcContract,
+    method: "environment",
+    input: { threadId },
+  });
 }
 
 export function useSideChats(threadId: string) {

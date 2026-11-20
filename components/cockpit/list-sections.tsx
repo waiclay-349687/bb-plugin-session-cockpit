@@ -1,11 +1,11 @@
 /**
- * [INPUT]: 依赖双语的服务归属、命令操作及 依赖 data.ts (useSession/useServers/useScripts/useSideChats/useNow)、rpc.ts 契约、宿主 useSdk (terminals)、useBbNavigate、copyToClipboard
+ * [INPUT]: 依赖双语的服务归属、命令操作以及 data.ts (useSession/useServers/useScripts/useSideChats/useNow)、rpc.ts 契约、宿主 useSdk (terminals)、useBbNavigate、copyToClipboard
  * [OUTPUT]: 对外提供 ConnectorsSection / ServersSection / ScriptsSection / SideChatsSection: 列表型分区 (一行摘要 → 就地展开为列表)
  * [POS]: components/cockpit 的列表分区, 对应 Claude Desktop 的 Connectors 与 T3 Code 的 Servers / Project scripts / Side chats;
  *        消费者: cockpit.tsx; 与 context-section.tsx 的边界: 连接器只到 server 级, 工具明细在上下文分类里展开
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useTranslation, useText, notifyCockpit } from "./language";
+import { useTranslation, useText, useSectionNotice } from "./language";
 import { useState } from "react";
 import {
   experimental_copyToClipboard as copyToClipboard,
@@ -125,6 +125,7 @@ function ownerText(t: Text, server: ListenerInfo, threadId: string): string {
 }
 
 function ServerRow({ threadId, server }: { threadId: string; server: ListenerInfo }) {
+  const notifyCockpit = useSectionNotice();
   const t = useText();
   const navigate = useBbNavigate();
   const rpc = useRpc<typeof rpcContract>();
@@ -210,6 +211,7 @@ export function ScriptsSection({ threadId, projectId, open, onToggle }: SectionP
 const PREVIEW_DELAY_MS = 2000;
 
 function ScriptRow({ threadId, projectId, script, onEdit }: { threadId: string; projectId: string; script: ProjectScript; onEdit: () => void }) {
+  const notifyCockpit = useSectionNotice();
   const { t, language } = useTranslation();
   const sdk = useSdk();
   const navigate = useBbNavigate();
@@ -273,6 +275,7 @@ function toBase64(text: string): string {
 }
 
 function ScriptForm({ projectId, script, onDone }: { projectId: string; script: ProjectScript | null; onDone: () => void }) {
+  const notifyCockpit = useSectionNotice();
   const t = useText();
   const rpc = useRpc<typeof rpcContract>();
   const [name, setName] = useState(script?.name ?? "");
@@ -333,6 +336,7 @@ function ScriptForm({ projectId, script, onDone }: { projectId: string; script: 
 // ---------------------------------------------------------------------------
 
 export function SideChatsSection({ threadId, open, onToggle }: SectionProps) {
+  const notifyCockpit = useSectionNotice();
   const { t, language, formatAgo } = useTranslation();
   const query = useSideChats(threadId);
   const chats = query.data?.chats ?? [];

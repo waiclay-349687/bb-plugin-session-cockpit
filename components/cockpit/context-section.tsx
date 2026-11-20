@@ -1,10 +1,11 @@
 /**
- * [INPUT]: 依赖分类与文件标签的语言映射及 依赖 data.ts 的 useSession/useNow、lib/usage.ts 的标签与工具名推断、lib/palette.ts 配色、宿主 FileLink 与 threads.compact、脚手架 Dialog
- * [OUTPUT]: 对外提供 ContextSection: 官方分段与估算分段共用 Context 界面，文件明细另标观测读取来源 (一行摘要 → 就地展开分类明细 → 分类再就地展开前 8 个条目 → 更多时弹层搜索); CompactButton: 两步确认的压缩按钮 (usage-section 复用)
+ * [INPUT]: 依赖用户阈值、就地条数、分类与文件标签的语言映射和 data.ts 的 useSession/useNow、lib/usage.ts 的标签与工具名推断、lib/palette.ts 配色、宿主 FileLink 与 threads.compact、脚手架 Dialog
+ * [OUTPUT]: 对外提供 ContextSection: 官方分段与估算分段共用 Context 界面，文件明细另标观测读取来源 (一行摘要 → 就地展开分类明细 → 分类按用户设置就地展开若干条目 → 更多时弹层搜索); CompactButton: 两步确认的压缩按钮 (usage-section 复用)
  * [POS]: 对应 Claude Desktop 的 Context 面板; 消费者: cockpit.tsx; 与 usage-section.tsx 的边界: 本分区只讲"窗口里装了什么", 消耗、额度与缓存在 Usage 分区
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useTranslation, useText, notifyCockpit } from "./language";
+import { usePrefs } from "./prefs";
+import { useTranslation, useText, useSectionNotice } from "./language";
 import { useMemo, useState } from "react";
 import { experimental_FileLink as FileLink, useSdk } from "@get-bb/plugin-sdk/app";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,15 +20,16 @@ import { categoryText, fileEntryText, textFor, type Language, type MessageKey, t
 import { toolName } from "../../lib/usage";
 import type { SectionProps } from "./cockpit";
 import { useNow, useSession } from "./data";
-import { Collapse, Hint, SectionBody, SectionRow, toneVar } from "./rows";
+import { CHEVRON_MOTION, Collapse, Hint, PRESSABLE, SectionBody, SectionRow, toneVar } from "./rows";
 
 export function ContextSection({ threadId, open, onToggle }: SectionProps) {
   const { t, formatTokens } = useTranslation();
   const session = useSession(threadId).data;
+  const { prefs: { display: { warningPercent } } } = usePrefs();
   const ctx = session?.context;
   if (!session || !ctx || ctx.windowTokens <= 0) return null;
   const ratio = ctx.usedTokens / ctx.windowTokens;
-  const tone = meterTone(ratio);
+  const tone = meterTone(ratio, warningPercent / 100);
   return (
     <div>
       <SectionRow
@@ -46,13 +48,13 @@ export function ContextSection({ threadId, open, onToggle }: SectionProps) {
         }
       />
       <SectionBody open={open}>
-        <Body session={session} ctx={ctx} />
+        <Body session={session} ctx={ctx} warningRatio={warningPercent / 100} />
       </SectionBody>
     </div>
   );
 }
 
-function Body({ session, ctx }: { session: SessionSnapshot; ctx: SessionContext }) {
+function Body({ session, ctx, warningRatio }: { session: SessionSnapshot; ctx: SessionContext; warningRatio: number }) {
   const { t, formatAgo } = useTranslation();
   const now = useNow(30_000);
   // 就地展开的分类, 可同时展开多个; 条目很多时再用弹层看全部
@@ -92,7 +94,7 @@ function Body({ session, ctx }: { session: SessionSnapshot; ctx: SessionContext 
       <div className="px-2 pb-1 pt-0.5">
         <ContextBar ctx={ctx} />
       </div>
-      {ctx.usedTokens / ctx.windowTokens >= 0.8 ? (
+      {ctx.usedTokens / ctx.windowTokens >= warningRatio ? (
         <Hint tone="warning">
           {t("contextWarning", { percent: formatPercent(1 - ctx.usedTokens / ctx.windowTokens, 0) })}
         </Hint>
@@ -171,8 +173,6 @@ const CATEGORY_HELP: Partial<Record<string, MessageKey>> = {
   "Autocompact buffer": "bufferHelp",
 };
 
-const INLINE_ROWS = 8;
-
 function CategoryRow({
   category,
   fileCount,
@@ -218,7 +218,7 @@ function CategoryRow({
         {hasEntries ? (
             <Icon
               name="ChevronRight"
-              className={cn("size-3 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-90")}
+              className={cn("size-3 shrink-0 text-muted-foreground", CHEVRON_MOTION, open && "rotate-90")}
               aria-hidden
             />
         ) : null}
@@ -235,7 +235,7 @@ function CategoryRow({
       {hasEntries ? (
         <button
           type="button"
-          className={cn(cls, "hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:scale-100 active:bg-state-active")}
+          className={cn(cls, PRESSABLE, "hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:bg-state-active")}
           onClick={onToggle}
           aria-expanded={open}
         >
@@ -257,10 +257,11 @@ function CategoryRow({
 function InlineEntries({ category, hostId, onShowAll }: { category: SessionCategory; hostId: string | null; onShowAll: () => void }) {
   const { t, formatTokens } = useTranslation();
   const entries = useMemo(() => [...category.entries].sort((a, b) => b.tokens - a.tokens), [category.entries]);
-  const rest = entries.length - INLINE_ROWS;
+  const { prefs: { display: { inlineLimit } } } = usePrefs();
+  const rest = entries.length - inlineLimit;
   return (
     <div className="mb-1 ml-[19px] border-l border-border pl-2">
-      {entries.slice(0, INLINE_ROWS).map((entry) => (
+      {entries.slice(0, inlineLimit).map((entry) => (
         <div key={entry.id} className="flex h-5 items-center gap-2 pr-2 text-[11px] text-muted-foreground pointer-coarse:h-8" title={entryTitle(t, category, entry)}>
           <span className="min-w-0 flex-1 truncate">
             <EntryLabel category={category} entry={entry} hostId={hostId} />
@@ -271,7 +272,7 @@ function InlineEntries({ category, hostId, onShowAll }: { category: SessionCateg
       {rest > 0 ? (
         <button
           type="button"
-          className="flex h-5 w-full items-center rounded pr-2 text-left text-[11px] text-muted-foreground hover:text-foreground active:scale-100 pointer-coarse:h-8"
+          className={cn("flex h-5 w-full items-center rounded pr-2 text-left text-[11px] text-muted-foreground hover:text-foreground pointer-coarse:h-8", PRESSABLE)}
           onClick={onShowAll}
           aria-haspopup="dialog"
         >
@@ -329,6 +330,7 @@ export function memoryName(path: string, language: Language = "en"): string {
  */
 function EntriesDialog({ category, hostId, onClose }: { category: SessionCategory | null; hostId: string | null; onClose: () => void }) {
   const { t, formatTokens } = useTranslation();
+  const { prefs: { display: { inlineLimit } } } = usePrefs();
   const [query, setQuery] = useState("");
   const entries = useMemo(() => {
     if (!category) return [];
@@ -357,7 +359,7 @@ function EntriesDialog({ category, hostId, onClose }: { category: SessionCategor
                 {category.kind === "deferred" ? ` · ${t("deferred")}` : ""}
               </DialogDescription>
             </DialogHeader>
-            {category.entries.length > 8 ? (
+            {category.entries.length > inlineLimit ? (
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("filter")} aria-label={t("filter")} className="h-8 text-sm" />
             ) : null}
             <div className="max-h-[50dvh] min-h-24 overflow-y-auto">
@@ -380,6 +382,7 @@ function EntriesDialog({ category, hostId, onClose }: { category: SessionCategor
 
 /** 两步确认: 压缩会让 agent 总结并丢弃历史细节, 不可撤销; 文字宽度固定不跳动。Usage 分区的缓存将过期提示也用它 */
 export function CompactButton({ threadId, disabled }: { threadId: string; disabled: boolean }) {
+  const notifyCockpit = useSectionNotice();
   const t = useText();
   const sdk = useSdk();
   const [armed, setArmed] = useState(false);

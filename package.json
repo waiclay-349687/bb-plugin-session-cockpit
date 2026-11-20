@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Session Cockpit",
-    "description": "Context breakdown, prompt cache, session tokens, dev servers, side chats and project scripts in the thread context card at each thread's upper right.",
+    "description": "Environment, context breakdown, prompt cache, session tokens, dev servers, side chats and project scripts in the thread context card at each thread's upper right.",
     "branding": {
       "icon": "Limitation"
     },

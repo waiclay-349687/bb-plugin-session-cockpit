@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 bb.sdk 的 threads (get/context/events)、environments; 依赖宿主入口 (contract.ts) 发现端口与上下文文件; 依赖 lib/usage.ts 归一用量、lib/context-estimate.ts 追踪已读并估算分类
+ * [INPUT]: 依赖 bb.sdk 的 threads (get/context/events)、environments、projects、hosts; 依赖 lib/environment.ts 归一环境信息; 依赖宿主入口 (contract.ts) 发现端口与上下文文件; 依赖 lib/usage.ts 归一用量、lib/context-estimate.ts 追踪已读并估算分类
  * [OUTPUT]: 对外提供插件工厂 (default export): 注册 rpc.ts 契约的全部 handler、线程事件驱动的失效刷新, 服务端语言配置，以及 `bb session-cockpit` CLI
  * [POS]: 插件后端入口; 消费者: components/cockpit/* (经 RPC)、agent (经 CLI); 与 host.ts 的边界: 本文件解析线程→环境→宿主机, host.ts 只在机器上执行 lsof 与读文件系统; 与 rpc.ts 的边界: 契约形状在 rpc.ts, 本文件只实现
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
@@ -9,12 +9,14 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { ESTIMATE_EVENTS, contextFileUsage, estimateCategories, messageEstimates, scanWindowActivity, shouldEstimate, type WindowActivity } from "./lib/context-estimate";
 import { fileUsageSummary, loadedEntries } from "./lib/context-files";
+import { environmentInfo } from "./lib/environment";
 import { LANGUAGE_MODES, languageMode } from "./lib/i18n";
 import { hostContract, type ListenerInfo } from "./contract";
 import {
   rpcContract,
   scriptSchema,
   type ContextFilesResult,
+  type EnvironmentResult,
   type ProjectScript,
   type ServersResult,
   type SessionSnapshot,
@@ -75,6 +77,7 @@ export default function plugin(bb: BbPluginApi) {
       : null;
     return {
       thread,
+      environment,
       hostId: environment?.hostId ?? null,
       environmentId: environment?.id ?? null,
       environmentPath: environment?.path ?? null,
@@ -195,6 +198,20 @@ export default function plugin(bb: BbPluginApi) {
     };
   }
 
+  // ----- 环境: 线程跑在哪 (项目 / 仓库 / 类型 / 分支 / 路径); 分支的实时值与改动数由前端跨插件读 bb--git -----
+
+  async function buildEnvironment(threadId: string, signal?: AbortSignal): Promise<EnvironmentResult> {
+    const { thread, environment } = await resolveThread(threadId, signal);
+    if (!environment) return null;
+    // 项目或机器读不到时仍显示环境本身, 不让整个分区消失
+    const [project, hosts] = await Promise.all([
+      bb.sdk.projects.get({ projectId: thread.projectId, signal }).catch(() => null),
+      bb.sdk.hosts.list({ signal }).catch(() => []),
+    ]);
+    const live = hosts.filter((h) => h.lifecycle.phase !== "destroyed");
+    return environmentInfo(environment, project, live.find((h) => h.id === environment.hostId) ?? null, live.length);
+  }
+
   // ----- Servers -----
 
   async function listServers(threadId: string, signal?: AbortSignal): Promise<ServersResult> {
@@ -267,6 +284,7 @@ export default function plugin(bb: BbPluginApi) {
     language: async () => ({ language: languageMode((await settings.get()).language) }),
     setLanguage: async ({ language }) => ({ language: languageMode((await settings.experimental_set({ language })).language) }),
     session: ({ threadId }, ctx) => buildSession(threadId, ctx.experimental_signal),
+    environment: ({ threadId }, ctx) => buildEnvironment(threadId, ctx.experimental_signal),
     contextFiles: async ({ threadId }, ctx) => workspaceContextFiles(await resolveThread(threadId, ctx.experimental_signal)),
     servers: ({ threadId }, ctx) => listServers(threadId, ctx.experimental_signal),
     sideChats: ({ threadId }, ctx) => listSideChats(threadId, ctx.experimental_signal),
@@ -333,13 +351,14 @@ export default function plugin(bb: BbPluginApi) {
   // 状态切换 (开始/结束回合) 立即刷新, 不等节流; 回合结束时限额也可能变化
   bb.events.on("thread.active", ({ thread }) => {
     touchSideChat(thread);
-    bb.rpc.experimental_invalidate([`thread:${thread.id}`]);
+    // 新线程的环境在首轮开始前后才就绪, 不等回合结束
+    bb.rpc.experimental_invalidate([`thread:${thread.id}`, `environment:${thread.id}`]);
   });
   bb.events.on("thread.idle", ({ thread }) => {
     touchSideChat(thread);
     // 回合里 agent 可能改了上下文文件: 先清缓存再通知, 否则重取拿到的还是旧的
     contextFilesCache.clear();
-    bb.rpc.experimental_invalidate([`thread:${thread.id}`, `contextfiles:${thread.id}`]);
+    bb.rpc.experimental_invalidate([`thread:${thread.id}`, `contextfiles:${thread.id}`, `environment:${thread.id}`]);
   });
   bb.events.on("thread.deleted", ({ thread }) => {
     touchSideChat(thread);

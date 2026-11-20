@@ -1,15 +1,16 @@
 /**
- * [INPUT]: 依赖双语状态与 依赖 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery 跨插件读取 worktree-lineage 插件的 briefing RPC (存盘的"全程速览" + 是否落后 + 兜底摘要); 依赖 data.ts 的 useSession (本轮是否在跑、已完成几轮, 用来决定何时重读)
- * [OUTPUT]: 对外提供 ProgressSection: Progress 组里唯一的一项。收起时一行 = 当前阶段 + 完成数 (如 "● 右上角 Session 插件  3/5"); 点开 = 一句话概括 + 完整的阶段轨道 (每个阶段带结论)
- * [POS]: components/cockpit 的"这条对话到哪了"分区; 消费者: cockpit.tsx; 与 worktree-lineage 的边界: 速览由那个插件在每轮结束时让小模型写好并存盘, 这里只读、从不触发生成, 所以多显示一处不多花一分额度;
+ * [INPUT]: 依赖板块有效语言（含 useSectionNotice 轻提示）、lib/briefing-regenerate 的结果契约与提示映射和 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery 跨插件读取 worktree-lineage 插件的 briefing RPC (存盘的"全程速览" + 是否落后 + 兜底摘要); 依赖 data.ts 的 useSession (本轮是否在跑、已完成几轮, 用来决定何时重读)
+ * [OUTPUT]: 对外提供 ProgressSection: Progress 组里唯一的一项（展开后的底栏有“重新生成”按钮，调用 worktree-lineage 的 regenerateBriefing）。收起时一行 = 当前阶段 + 完成数 (如 "● 右上角 Session 插件  3/5"); 点开 = 一句话概括 + 完整的阶段轨道 (每个阶段带结论)
+ * [POS]: components/cockpit 的"这条对话到哪了"分区; 消费者: cockpit.tsx; 与 worktree-lineage 的边界: 速览由那个插件在每轮结束时让小模型写好并存盘, 本分区平时只读已保存内容; 只有用户点“重新生成”才请对方立即重写一次 (花一次额度, 受对方每天上限约束);
  *        那个插件没装、被停用或返回的形状对不上时, 本分区不显示
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useTranslation, useText } from "./language";
+import { useSectionNotice, useTranslation, useText } from "./language";
 import { matchingProse } from "../../lib/i18n";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
-import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { canRegenerate, regenerateNotice, regenerateResultSchema } from "../../lib/briefing-regenerate";
 import { z } from "zod";
 import { Icon } from "@/components/ui/icon";
 import { useSession } from "./data";
@@ -41,6 +42,11 @@ const briefingContract = defineRpcContract({
       enabled: z.boolean(),
     }),
   },
+  /** 手动重新生成一条对话的速览：对方立即按当前配置重写，status 说明结果 */
+  regenerateBriefing: {
+    input: z.object({ threadId: z.string() }),
+    output: regenerateResultSchema,
+  },
 });
 type Stage = z.infer<typeof stageSchema>;
 
@@ -66,7 +72,42 @@ function useBriefing(threadId: string) {
     const timers = REFETCH_AFTER_IDLE_MS.map((delay) => setTimeout(() => void refetchRef.current(), delay));
     return () => timers.forEach(clearTimeout);
   }, [running, completed]);
-  return query.data;
+  return { view: query.data, refetch: () => refetchRef.current() };
+}
+
+/**
+ * 重新生成：调用对方的 regenerateBriefing，生成中禁用并显示省略号防连点；完成后重读速览，
+ * 轻提示按 Progress 板块的有效语言说明结果（成功、开关关着、没有内容、额度用完、模型都失败、插件不可用）。样式与 Compact 一致。
+ */
+function RegenerateButton({ threadId, onDone }: { threadId: string; onDone: () => Promise<unknown> }) {
+  const t = useText();
+  const notify = useSectionNotice();
+  const mutation = experimental_useRpcMutation({ pluginId: BRIEFING_PLUGIN_ID, contract: briefingContract, method: "regenerateBriefing" });
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const result = await mutation.mutate({ threadId }).catch(() => null);
+      const notice = regenerateNotice(result);
+      if (result?.ok) await onDone().catch(() => undefined);
+      notify(notice.kind, notice.key);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="h-5 min-w-[4.5rem] shrink-0 rounded border border-border px-1.5 text-center text-[11px] text-foreground hover:bg-state-hover disabled:pointer-events-none disabled:opacity-40 pointer-coarse:h-8"
+      disabled={busy}
+      aria-busy={busy || undefined}
+      onClick={() => void run()}
+      aria-label={t(busy ? "regenerating" : "regenerateProgress")}
+      title={t(busy ? "regenerating" : "regenerateProgress")}
+    >
+      {busy ? "…" : t("regenerate")}
+    </button>
+  );
 }
 
 
@@ -120,7 +161,7 @@ function headline(stages: readonly Stage[]): Stage | undefined {
 
 export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
   const { t, language } = useTranslation();
-  const view = useBriefing(threadId);
+  const { view, refetch } = useBriefing(threadId);
   // 插件没装 / 用户关了速览 / 还一轮都没聊: 没有可显示的东西 (整组连组名一起不出现)
   if (!view || !view.enabled || (view.briefing === null && view.recap.turns === 0)) return null;
   const { briefing } = view;
@@ -129,7 +170,8 @@ export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
     return (
       <div data-cockpit-item="" className="flex h-6.5 items-center gap-2 px-2 text-xs text-muted-foreground pointer-coarse:h-9">
         <Icon name="ListTodo" fallback="Circle" className="size-3.5 shrink-0" aria-hidden />
-        <span>{t("writtenWhenDone")}</span>
+        <span className="min-w-0 flex-1 truncate">{t("writtenWhenDone")}</span>
+        {canRegenerate(view) ? <RegenerateButton threadId={threadId} onDone={refetch} /> : null}
       </div>
     );
   }
@@ -155,7 +197,11 @@ export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
       <SectionBody open={open}>
         <p className="px-2 pt-0.5 text-xs leading-4 text-foreground">{matchingProse(language, briefing.about) ?? t("progressFallback")}</p>
         <Stages stages={briefing.stages} />
-        {behind ? <p className="px-2 pt-2 text-[11px] leading-4 text-muted-foreground">{t("updatesWhenDone")}</p> : null}
+        {/* 底栏：左边是“落后时会在这一轮结束后更新”的说明，右边是重新生成（与 Context 底栏的 Compact 同样式） */}
+        <div className="flex items-center gap-2 px-2 pt-2">
+          <span className="min-w-0 flex-1 truncate text-[11px] leading-4 text-muted-foreground">{behind ? t("updatesWhenDone") : ""}</span>
+          {canRegenerate(view) ? <RegenerateButton threadId={threadId} onDone={refetch} /> : null}
+        </div>
       </SectionBody>
     </div>
   );

@@ -16,6 +16,7 @@ import type { SessionSnapshot } from "../../rpc";
 import { cacheState } from "../../lib/usage";
 import { Cockpit } from "./cockpit";
 import { useNow, useSession } from "./data";
+import { CHEVRON_MOTION, PRESSABLE } from "./rows";
 
 function cacheLabel(session: SessionSnapshot, now: number, language: Language): string | null {
   const state = cacheState({
@@ -44,7 +45,8 @@ export function SessionSegmentSummary({ threadId, isExpanded, onToggle }: Experi
       type="button"
       ref={heading}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 truncate rounded px-1 text-xs hover:text-foreground active:scale-100 pointer-coarse:min-h-8",
+        "inline-flex max-w-full items-center gap-1.5 truncate rounded px-1 text-xs hover:text-foreground pointer-coarse:min-h-8",
+        PRESSABLE,
         isExpanded ? "text-foreground" : "text-muted-foreground",
       )}
       onClick={onToggle}
@@ -56,7 +58,7 @@ export function SessionSegmentSummary({ threadId, isExpanded, onToggle }: Experi
       {cache && total !== null ? <span aria-hidden>·</span> : null}
       {total !== null ? <span className="tabular-nums">{t("tokens", { count: formatTokens(total) })}</span> : null}
       {!cache && total === null ? <span>{t("session")}</span> : null}
-      <Icon name="ChevronDown" className={cn("size-3 shrink-0 transition-transform duration-150", isExpanded && "rotate-180")} aria-hidden />
+      <Icon name="ChevronDown" className={cn("size-3 shrink-0", CHEVRON_MOTION, isExpanded && "rotate-180")} aria-hidden />
     </button>
   );
 }

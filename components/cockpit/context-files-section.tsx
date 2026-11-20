@@ -1,11 +1,12 @@
 /**
- * [INPUT]: 依赖本地化层级和状态及 依赖 data.ts 的 useContextFiles (工作区的上下文文件: 层级、有无改动、导入) 与 useSession (官方、启动估算和观测读取的实时统计); 依赖 lib/context-files.ts 的合并、分层、就地筛选与分组;
+ * [INPUT]: 依赖本地化层级、状态、用户就地条数设置和 data.ts 的 useContextFiles (工作区的上下文文件: 层级、有无改动、导入) 与 useSession (官方、启动估算和观测读取的实时统计); 依赖 lib/context-files.ts 的合并、分层、就地筛选与分组;
  *          依赖宿主的 useBbNavigate (在 bb 的文件面板里预览 / 用外部编辑器打开)、experimental_useCanOpenFileExternally、copyToClipboard 与脚手架 Dialog
- * [OUTPUT]: 对外提供 ContextFilesSection: Workspace 组里的 Context files 项。收起 = 一行 (已加载数 · 总数, 不知道已加载时只写总数); 点开 = 每个有文件的层级一行; 层级再点开 = 它的文件 (超过 8 个时只就地列已加载与有改动的, 其余进可搜索的弹层)
+ * [OUTPUT]: 对外提供 ContextFilesSection: Workspace 组里的 Context files 项。收起 = 一行 (已加载数 · 总数, 不知道已加载时只写总数); 点开 = 每个有文件的层级一行; 层级再点开 = 它的文件 (超过就地条数时只就地列已加载与有改动的, 其余进可搜索的弹层)
  * [POS]: components/cockpit 的"哪些文件在给 agent 定规矩"入口 (词汇见 GLOSSARY.md); 消费者: cockpit.tsx; 与 context-section.tsx 的边界: 那边按占用多少列出上下文明细里 Memory files 分类的条目, 这里按层级列出磁盘上全部的上下文文件, 已加载只是其中一个标记
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useTranslation, useText, notifyCockpit } from "./language";
+import { usePrefs } from "./prefs";
+import { useTranslation, useText, useSectionNotice } from "./language";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   experimental_copyToClipboard as copyToClipboard,
@@ -17,7 +18,6 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
-  INLINE_LIMIT,
   fileLabel,
   groupByLevel,
   groupByTopDir,
@@ -34,7 +34,7 @@ import { levelText } from "../../lib/i18n";
 import { formatPercent } from "../../lib/format";
 import type { SectionProps } from "./cockpit";
 import { useContextFiles, useSession } from "./data";
-import { CardRow, Collapse, Dot, Hint, MenuItem, SectionBody, SectionRow } from "./rows";
+import { CHEVRON_MOTION, CardRow, Collapse, Dot, Hint, MenuItem, PRESSABLE, SectionBody, SectionRow } from "./rows";
 
 export function ContextFilesSection({ threadId, open, onToggle }: SectionProps) {
   const t = useText();
@@ -137,7 +137,8 @@ function FileLabel({ file }: { file: ContextFileView }) {
 /** 一个层级: 读数行 (名称 + 个数 + 已加载数 + 有改动标记 + 箭头), 点开就地列出它的文件 */
 function Level({ group, hostId, open, onToggle, onShowAll }: { group: LevelGroup; hostId: string; open: boolean; onToggle: () => void; onShowAll: () => void }) {
   const t = useText();
-  const { files, showAll } = inlineSelection(group, INLINE_LIMIT);
+  const { prefs: { display: { inlineLimit } } } = usePrefs();
+  const { files, showAll } = inlineSelection(group, inlineLimit);
   return (
     <div>
       <CardRow
@@ -150,7 +151,7 @@ function Level({ group, hostId, open, onToggle, onShowAll }: { group: LevelGroup
             <span>{group.total}</span>
             {group.loaded !== null ? <span className="text-muted-foreground">· {t("loaded", { count: group.loaded })}</span> : null}
             {group.changed > 0 ? <ChangedMark /> : null}
-            <Icon name="ChevronRight" className={cn("size-3 text-muted-foreground transition-transform duration-150", open && "rotate-90")} aria-hidden />
+            <Icon name="ChevronRight" className={cn("size-3 text-muted-foreground", CHEVRON_MOTION, open && "rotate-90")} aria-hidden />
           </>
         }
       />
@@ -178,6 +179,7 @@ function Level({ group, hostId, open, onToggle, onShowAll }: { group: LevelGroup
 
 /** 文件行: 行体在 bb 的文件面板里预览; 行尾菜单里可以用外部编辑器单独打开、复制路径 */
 function FileRow({ hostId, path, name, label, trailing }: { hostId: string; path: string; name: string; label: ReactNode; trailing?: ReactNode }) {
+  const notifyCockpit = useSectionNotice();
   const t = useText();
   const navigate = useBbNavigate();
   const target = { kind: "host" as const, hostId, path };
@@ -251,7 +253,7 @@ function FilesDialog({ group, hostId, onClose }: { group: LevelGroup | null; hos
                     <button
                       key={file.path}
                       type="button"
-                      className="flex min-h-7 w-full min-w-0 items-center gap-3 rounded-md px-2 py-0.5 text-left text-sm hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:scale-100 active:bg-state-active pointer-coarse:min-h-9"
+                      className={cn("flex min-h-7 w-full min-w-0 items-center gap-3 rounded-md px-2 py-0.5 text-left text-sm hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none active:bg-state-active pointer-coarse:min-h-9", PRESSABLE)}
                       title={file.path}
                       onClick={() => {
                         void navigate.experimental_openFilePreview({ target: { kind: "host", hostId, path: file.path }, location: null });

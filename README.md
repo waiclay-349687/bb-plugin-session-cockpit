@@ -12,7 +12,8 @@ _Demo labels and paths in the live BB interface._
 
 | Group | At a glance |
 | --- | --- |
-| **Progress** | See the current stage and how many are done. Expand the row for the briefing and stage notes from the optional [Worktree Lineage](#related-bb-plugins) plugin. |
+| **Environment** | Shows the project name. Expand it for the repository, the environment kind (Worktree, Project checkout, Personal workspace), the branch with a green dot when clean or an orange `M` and the changed-file count from bb's git plugin, the path with a one-click copy, and **New thread in this environment**. Non-git workspaces show only the kind and path. |
+| **Progress** | See the current stage and how many are done. Expand the row for the briefing and stage notes from the optional [Worktree Lineage](#related-bb-plugins) plugin. **Regenerate** at the bottom rewrites the summary now with the current settings. |
 | **Usage** | See how full the context window is, what’s using it, and when the prompt cache might expire. The **Session** row adds token totals, cache hits, working time, and cost when the provider reports it. |
 | **Workspace** | See which context files are loaded and which dev servers are running. Preview a file, open a server, run a project script, see loaded MCP connectors, or open a side chat. |
 
@@ -20,7 +21,7 @@ _Demo labels and paths in the live BB interface._
 
 **Context breakdowns work across providers.** Claude Code’s official snapshots keep their published values. For providers such as Codex and Antigravity that report a total only, the card shows an **Estimated breakdown** whose used categories add up to the reported total.
 
-**Same details on phones and narrow panes.** Open the session banner above the composer when the desktop card doesn’t fit. On desktop, optional interface polish smooths card transitions, keeps the prompt navigator accessible, and adjusts pointer behavior. **Choose details** in plugin settings controls which rows appear.
+**Same details on phones and narrow panes.** Open the session banner above the composer when the desktop card doesn’t fit. On desktop, optional interface polish smooths card transitions, keeps the prompt navigator accessible, and adjusts pointer behavior. **Choose details** in plugin settings controls which rows appear, their order, and each row’s language.
 
 **Session Cockpit does not read or watch private local JSONL session logs.** Usage comes from BB’s APIs and events. File inventory and server discovery run on the workspace host.
 
@@ -32,7 +33,7 @@ _Demo labels and paths in the live BB interface._
 - **Context files.** Codex starts with matching global and project-root `AGENTS.md` files, preferring `AGENTS.override.md` where available. Antigravity uses matching `GEMINI.md` files. The plugin adds matched successful reads from the current context, deduplicates paths, and estimates one token per four file bytes.
 - **Residual and free space.** System & tools (est.) is the reported usage left after assigning messages and files. That remainder can include earlier history, compacted summaries, and hidden instructions. If the estimates run over the budget, the plugin scales and rounds the child entries so used categories still sum to the reported usage. Free space is window size minus reported usage, floored at zero.
 - **Session and cache.** Session totals come from `thread/tokenUsage/updated`. The plugin normalizes providers that include or exclude cached input in their totals. Cache warmth uses the latest usage timestamp and the provider’s TTL. The elapsed working time covers up to roughly 250 recent turns.
-- **Compaction.** The card warns as usage reaches 80%. Compact requires two clicks within three seconds. The observed-read count resets when BB reports a compaction or clear.
+- **Compaction.** The card warns as usage reaches the configured threshold (80% by default). Compact requires two clicks within three seconds. The observed-read count resets when BB reports a compaction or clear.
 
 </details>
 
@@ -51,7 +52,7 @@ _Demo labels and paths in the live BB interface._
 
 A green dot marks a loaded file. A small `M` marks workspace changes, including untracked files. A successful file-read event, a recognized read tool, or a simple single-file `cat` can record an observed read. The scan uses file metadata for modules and memory. Resolvable `@path` imports in Global, Parent, Project, Local, and Rules appear beneath their source file and stay out of the file count.
 
-When more than eight files share a level, the inline list prioritizes the memory index, loaded files, and changed files. Use **All N · search** to filter the full list by path. The expanded Workspace item rechecks disk changes every 30 seconds while visible.
+When a level exceeds the inline list limit (eight files by default), the inline list prioritizes the memory index, loaded files, and changed files. Use **All N · search** to filter the full list by path. The expanded Workspace item rechecks disk changes every 30 seconds while visible.
 
 </details>
 
@@ -75,7 +76,7 @@ Project scripts run in the thread’s terminal. An optional preview URL opens af
 <details>
 <summary>Interface details and theme compatibility</summary>
 
-Rows start collapsed and remember their open state in the browser. Long lists show a short inline preview and a searchable dialog. On touch screens, tap targets are 36 px tall and dialogs open as bottom sheets. Desktop card motion gives the transcript room, keeps the card in place when switching threads, and raises its height limit from 576 px to 864 px. The card scrolls internally when it fills up.
+Rows start collapsed and remember their open state in the browser. Long lists show a short inline preview and a searchable dialog. On touch screens, tap targets are 36 px tall and dialogs open as bottom sheets. Desktop card motion gives the transcript room, keeps the card in place when switching threads, and keeps the prompt navigator accessible. The card scrolls internally up to its configured maximum height (864 px by default).
 
 Some BB themes scale buttons on press. Cockpit rows use `active:scale-100` and a background change for stable press feedback. Desktop pointer polish preserves the text-selection cursor in the transcript and the hand cursor on links. The plugin respects reduced-motion preferences. Both polish options can be disabled independently. Settings show the results of the built-in checks for host UI changes after BB upgrades.
 
@@ -107,6 +108,14 @@ Choose **Language** in the plugin settings. `auto` follows BB’s interface lang
 ```sh
 bb plugin config session-cockpit set language zh
 ```
+
+### Customize the cockpit
+
+Open **Tools → Session Cockpit**. In **Choose details**, drag rows or use the up/down buttons to arrange all nine sections. Use the checkboxes to hide rows and the language menus to override the plugin language for individual sections. The desktop card and phone banner use the same browser preferences. Each panel has its own reset.
+
+**Display options** exposes the context warning threshold (50–95%, default 80%), inline list limit (4–20 rows, default 8), and desktop card height (480–1200 px, default 864 px).
+
+**Progress briefing** edits the shared Worktree Lineage settings when that plugin supports configuration. Set the generation language, gateway URL and model chain, fallback model, system prompt, and daily limit. You can copy the default prompt into the editor, restore it, reset today’s count, or clear cooldowns. If the Progress row uses a different language, the panel offers to match it before saving.
 
 ## Agent CLI
 

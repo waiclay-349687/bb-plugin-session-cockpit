@@ -9,6 +9,16 @@
 - 门禁：`npm run check`（类型检查 + 单测 + 构建）全部通过；2026-11-19 Context files 这一轮收尾时是 37 项单测，其中 18 项是 `test/context-files.test.ts`（同一时间另有会话在改 Limits 相关代码，总数以实际运行为准）。
 - 依赖的 bb 设置：实验开关 `threadContextCard` 已打开；卡片固定偏好 `threadContextCard.pinned` 为 true。
 
+## Environment 项与微动效（2026-11-19，未提交）
+
+背景：输入框底栏去掉了项目 / 工作区 / Worktree / 分支 / 「在此环境新建线程」，这些信息要落到右上角卡片里（参照 Claude Desktop 右上角 `Environment › Reader-Monorepo` 的层次）。
+
+- **改造前**：卡片里没有任何环境信息（只有 bb 自带的 Parent / Changes 行和 Progress / Usage / Workspace 三组）；`session` 快照里虽有 `environmentId / environmentPath`，界面没用。
+- **新增**：`lib/environment.ts`（纯逻辑，7 项单测）+ 服务端 `environment` RPC（环境 / 项目 / 机器三份 DTO 归一，tag `environment:<threadId>`，回合结束时失效）+ `components/cockpit/environment-section.tsx`。桌面用 `experimental_threadContextCardRow` 注册成卡片顶部的无标题行（`2_environment` 组，在 Parent 之后、Changes 之前），不是带组名的分区（行名就是 Environment，再加组名会重复）；横幅里排在所有组之前。分支与改动数跨插件只读 `bb--git` 的 `status`，只在展开时订阅。
+- **微动效**：`rows.tsx` 新增 `PRESSABLE` / `CHEVRON_MOTION` / `IconButton` / `CopyButton`，各分区的箭头与可点行统一改用；可点行按下 scale 0.97（用户这次明确要求，取代旧的"整行不缩放"约定）。
+- **在界面上验证过**（无头浏览器 1600 宽、900 宽横幅）：worktree（`reader`，Repository `ReadBreakthrough/Reader-Monorepo`，干净）、项目目录（Breakthrough-，16 个改动；后来把状态压短成绿点 / 橙色 `M16`）、长分支 worktree、个人工作区（只有 Personal workspace 与路径）；复制图标交叉淡入对勾、剪贴板内容为完整路径；折叠高度 138→0 平滑、箭头 200ms 旋转；浅色主题；减少动态效果时过渡全部为 none；新建线程落到新建页并预选项目、Reuse 该环境与分支（没有发送）；控制台 0 报错。
+- **没验证**：多台机器时的机器名（本机只有一台 host）；环境未就绪时的说明文字；中文界面下的实际排版（词条已加，单测覆盖双语纯度）。
+
 ## 第三轮改动（2026-11-18，在 worktree-lineage 的对话里做的，未提交）
 
 用户的三个要求：信息栏里的内容没有层级、把悬停卡片里的"可视化进展"也放进来、信息栏加高。
@@ -128,7 +138,7 @@
 - **卡片最高 576px**（bb 定的），超出在卡片内滚动。
 - **后台点击对 Claude Desktop 无效**，用 `orca computer` 操作它需要 `--restore-window`（会占用屏幕）。
 - **沙箱里的 Bash 写不了这个仓库和 `~/.bb/theme`**，需要关闭沙箱或用 Edit/Write 工具；docker 也只能在沙箱外调用。
-- **用户的 bb Glass 主题**对所有按钮有按下缩放（`scale: 0.96`）；插件的整行按钮用 `active:scale-100` 覆盖。用户当前用的是 Dracula 主题。
+- **用户的 bb Glass 主题**对所有按钮有按下缩放（`scale: 0.96`）；插件的行与按钮统一用 `rows.tsx` 的 `PRESSABLE`（`active:scale-[0.97]`，同为 `scale` 属性，覆盖而不叠乘；2026-11-19 起取代原来的 `active:scale-100`）。用户当前用的是 Dracula 主题。
 
 ## 验证方法
 

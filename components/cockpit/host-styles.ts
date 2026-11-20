@@ -1,8 +1,8 @@
 /**
- * [INPUT]: 依赖 bb 应用外壳的 DOM 结构 (见 HOOKS 清单)、prefs.ts 的开关、sonner 的 toast
+ * [INPUT]: 依赖 bb 应用外壳的 DOM 结构 (见 HOOKS 清单)、prefs.ts 的开关和卡片高度、sonner 的 toast
  * [OUTPUT]: 对外提供 mountHostStyles (内容脚本入口)、useHostHealth / recheckHostHealth、repairPrompt 与实时宿主分区标题同步
  * [POS]: 插件对 bb 宿主界面的全部"越界"改动都集中在这里, 与主题无关、任何主题下都生效:
- *        (1) 线程上下文卡片的出入场 (在会话之间切换时不重播入场: 卡片留在原地只换内容)、对话区平滑让位、历史导航条不被挤掉、卡片上限从 36rem 提到 54rem (2) 桌面习惯的箭头光标 (链接留手形、消息正文保留文字光标)。
+ *        (1) 线程上下文卡片的出入场 (在会话之间切换时不重播入场: 卡片留在原地只换内容)、对话区平滑让位、历史导航条不被挤掉、应用浏览器偏好中的卡片限高 (2) 桌面习惯的箭头光标 (链接留手形、消息正文保留文字光标)。
  *        这些规则依赖 bb 未承诺稳定的结构, 所以同文件里带自检: 结构变了就提醒, 并给出修复办法。
  *        消费者: app.tsx (contentScripts.register)、settings-section.tsx
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
@@ -65,8 +65,10 @@ export function useHostSettingsChrome() {
 
 const EASE = "var(--glass-ease, cubic-bezier(0.165, 0.84, 0.44, 1))";
 
-/** 卡片高度上限 (rem); bb 自己的是 36 */
-const TALL_CARD_REM = 54;
+const HEIGHT_VAR = "--session-cockpit-max-height";
+const CARD_HEIGHT_CSS = `
+[data-scroll-overlay] > [data-thread-context-card]:has([data-cockpit-layout]) { max-height: min(var(${HEIGHT_VAR}), calc(100% - 1.5rem)); }
+[data-thread-context-card-section]:has([data-cockpit-layout]):not(:has([data-cockpit-item])) { display: none; }`;
 /** 切换会话的瞬间挂在 <html> 上的标记: 这段时间里出现的卡片不做入场动画 */
 const WARM_ATTR = "data-session-cockpit-card-warm";
 const WARM_MS = 700;
@@ -84,8 +86,6 @@ const CARD_MOTION_CSS = `
 [data-scroll-overlay] { position: relative; }
 /* 卡片脱离浮层列的排版流, 否则它一出现就把历史导航条往下挤 */
 [data-scroll-overlay] > [data-thread-context-card] { position: absolute; top: 0.75rem; right: 0.75rem; }
-/* 卡片最高可到 54rem (bb 默认 36rem): Session 分区多了进展轨道, 常用的几个分区同时展开时不必在卡片里滚动 */
-[data-scroll-overlay] > [data-thread-context-card] { max-height: min(${TALL_CARD_REM}rem, calc(100% - 1.5rem)); }
 /* 卡片在时, 导航条平移到卡片左侧 (让位后的对话区右缘), 始终垂直居中 */
 [data-scroll-overlay]:has(> [data-thread-context-card]:not([hidden])) > .my-auto { translate: calc(-18rem - 0.75rem) 0; }
 @media (prefers-reduced-motion: no-preference) {
@@ -192,17 +192,17 @@ const HOOKS: Hook[] = [
   {
     id: "height",
     label: "checkHeight",
-    block: "cardMotion",
     check() {
       const card = document.querySelector<HTMLElement>("[data-scroll-overlay] > [data-thread-context-card]:not([hidden])");
       if (!card) return null;
-      // bb 自己的上限是 36rem; 规则生效后, 在够高的窗口里上限应当超过它
+      // 窗口足够高时，检查设定值是否实际覆盖 bb 的默认上限。
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const room = (card.parentElement?.clientHeight ?? 0) - 1.5 * rem;
-      if (room <= 36 * rem) return null;
+      const target = readPrefs().display.cardHeight;
+      if (room <= Math.min(36 * rem, target)) return null;
       // 算出来的 max-height 是一个 min(864px, 100% - 24px) 这样的表达式，不是数字：按里面有没有我们设的那个上限来判断
       const maxHeight = getComputedStyle(card).maxHeight;
-      const applied = maxHeight.includes(`${TALL_CARD_REM * rem}px`) || parseFloat(maxHeight) > 36 * rem + 1;
+      const applied = maxHeight.includes(`${target}px`) || Math.abs(parseFloat(maxHeight) - Math.min(target, room)) < 2;
       return applied ? true : "failedHeight";
     },
   },
@@ -375,8 +375,9 @@ export function mountHostStyles({ signal }: { signal: AbortSignal }): () => void
   const style = document.createElement("style");
   style.id = STYLE_ID;
   const apply = () => {
-    const { hostStyles } = readPrefs();
-    style.textContent = (hostStyles.cardMotion ? CARD_MOTION_CSS : "") + (hostStyles.desktopCursor ? CURSOR_CSS : "");
+    const { hostStyles, display } = readPrefs();
+    document.documentElement.style.setProperty(HEIGHT_VAR, `${display.cardHeight}px`);
+    style.textContent = CARD_HEIGHT_CSS + (hostStyles.cardMotion ? CARD_MOTION_CSS : "") + (hostStyles.desktopCursor ? CURSOR_CSS : "");
   };
   apply();
   document.head.appendChild(style);
@@ -433,6 +434,7 @@ export function mountHostStyles({ signal }: { signal: AbortSignal }): () => void
     clearWarm();
     unsubscribe();
     style.remove();
+    root.style.removeProperty(HEIGHT_VAR);
   };
   signal.addEventListener("abort", dispose, { once: true });
   return dispose;

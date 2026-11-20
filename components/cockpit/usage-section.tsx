@@ -15,7 +15,7 @@ import { formatPercent } from "../../lib/format";
 import { cacheState, hitRate } from "../../lib/usage";
 import { useNow, useSession } from "./data";
 import type { SectionProps } from "./cockpit";
-import { CardRow, Collapse, Dot, Hint, SectionBody, SectionRow, toneVar } from "./rows";
+import { CHEVRON_MOTION, CardRow, Collapse, Dot, Hint, SectionBody, SectionRow, toneVar } from "./rows";
 import { CompactButton } from "./context-section";
 
 /** 剩余不足这个时长且上下文够大时, 提示先压缩 (Ghostex 的空闲压缩思路) */
@@ -170,7 +170,7 @@ function TokenDetails({ session }: { session: SessionSnapshot }) {
           <>
             <span>{formatTokens(total.total)}</span>
             <span className="text-muted-foreground">· {t("cached", { percent: formatPercent(hitRate(total)) })}</span>
-            <Icon name="ChevronRight" className={cn("size-3 text-muted-foreground transition-transform duration-150", open && "rotate-90")} aria-hidden />
+            <Icon name="ChevronRight" className={cn("size-3 text-muted-foreground", CHEVRON_MOTION, open && "rotate-90")} aria-hidden />
           </>
         }
       />
