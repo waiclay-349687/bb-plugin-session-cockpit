@@ -10,7 +10,8 @@ context-files.ts: 上下文文件领域核心（词汇见 GLOSSARY.md）。发�
 environment.ts: 环境领域核心，环境类型（provision 类型优先：personal / managed-worktree；手动加入的 git worktree 也算 Worktree；其余按 isGitRepo 分项目目录 / 普通目录）、remote → owner/repo、仓库名与项目名相同时不重复、多于一台机器才写机器名、bb--git status 行 → 无改动 / n 项有改动、路径拆成可截断的上级与完整末段
 format.ts: 显示格式化，token 紧凑写法、百分比、时长/倒计时、成本、TTL
 cockpit-prefs.ts: 板块定义、浏览器偏好版本和迁移、顺序、语言覆写、显示参数规范与校验。
-briefing-config.ts: Worktree Lineage 配置读写契约、输入范围与差量更新。
+briefing-config.ts: Worktree Lineage 配置读写契约、输入范围与差量更新；progressLanguagePatch（Progress 板块改语言时同步给速览生成语言的补丁）。
+progress-view.ts: briefingDisplay，Progress 显示什么：概括、阶段标题与细则原样给出（不论语言），只有字段为空才用占位字；收起时的阶段与完成数。
 briefing-regenerate.ts: Worktree Lineage 的 regenerateBriefing 结果契约（只抄 ok / status，不认识的状态按失败）、canRegenerate（Progress 何时给按钮）与 regenerateNotice（结果 → 轻提示词条）。
 palette.ts: 视觉映射，上下文分类 → 宿主 ANSI 主题色，用量阈值色调（可配置的警戒值默认 80%，95% 为危险值）
 utils.ts / portal-scope.ts: 脚手架 vendored 工具（cn、portal 作用域），L3 豁免

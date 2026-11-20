@@ -1,12 +1,14 @@
 /**
  * [INPUT]: 依赖 prefs.ts 的 SECTION_DEFS 与 usePrefs、host-styles.ts 的自检结果、脚手架 Checkbox
- * [OUTPUT]: 提供语言、板块编排、显示参数、宿主样式和自检设置
+ * [OUTPUT]: 提供语言、板块编排、显示参数、宿主样式和自检设置；Progress 板块改语言时经 worktree-lineage 的 setBriefingConfig 同步速览生成语言
  * [POS]: components/cockpit 的设置视图; 消费者: app.tsx 的 settingsSection; 与各分区的边界: 卡片高度有限, 开关不放进卡片本身
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
 import { useText, useLanguage, useLanguageMode, notifyCockpit } from "./language";
 import { useEffect, useState } from "react";
-import { experimental_copyToClipboard as copyToClipboard } from "@get-bb/plugin-sdk/app";
+import { experimental_copyToClipboard as copyToClipboard, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
+import { progressLanguagePatch } from "../../lib/briefing-config";
+import { BRIEFING_CONFIG_CHANGED_EVENT, BRIEFING_PLUGIN_ID, briefingConfigContract } from "./briefing-settings";
 import { DISPLAY_LIMITS, type DisplayKey } from "../../lib/cockpit-prefs";
 import { languageMode } from "../../lib/i18n";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +21,8 @@ const ARROW = "h-7 w-7 rounded-md border border-border text-sm hover:bg-state-ho
 export function ChooseDetailsSettings() {
   const t = useText();
   const { prefs, isHidden, toggleHidden, move, setSectionLanguage, reset } = usePrefs();
+  // Progress 显示的就是 worktree-lineage 写的速览：改 Progress 的语言时把速览生成语言一起同步过去（对方缺席时只改本地）
+  const syncBriefing = experimental_useRpcMutation({ pluginId: BRIEFING_PLUGIN_ID, contract: briefingConfigContract, method: "setBriefingConfig" });
   const [dragged, setDragged] = useState<SectionId | null>(null);
   const [over, setOver] = useState<SectionId | null>(null);
   return (
@@ -63,6 +67,13 @@ export function ChooseDetailsSettings() {
                 value={prefs.sectionLanguages[id] ?? "auto"} onChange={event => {
                   const mode = languageMode(event.target.value);
                   setSectionLanguage(id, mode === "auto" ? undefined : mode);
+                  const patch = progressLanguagePatch(id, mode);
+                  if (patch) {
+                    void syncBriefing
+                      .mutate(patch)
+                      .then(() => window.dispatchEvent(new Event(BRIEFING_CONFIG_CHANGED_EVENT)))
+                      .catch(() => notifyCockpit("error", "briefingSyncFailed"));
+                  }
                 }}>
                 <option value="auto">{t("followPlugin")}</option>
                 <option value="en">{t("english")}</option>

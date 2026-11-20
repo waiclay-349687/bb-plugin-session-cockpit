@@ -33,7 +33,7 @@ build: npm run build（= bb plugin build）
 插件 kv 里的 `scripts:<projectId>` 是用户数据，改结构需兼容旧值（读取时 zod 校验，坏值回落空列表）。
 浏览器偏好存 localStorage `bb-plugin-session-cockpit:prefs:v7`，记录板块顺序、独立语言、显隐与展开状态、显示参数及界面优化。读取时从 v6 / v5 / v4 迁移，补齐缺少的板块并校验显示参数。
 Environment 项跨插件只读 bb 内置 `bb--git` 插件的 `status` keyed RPC（只抄用到的字段）；读不到时只去掉"无改动 / n 项有改动"提示，分支回落到环境记录。
-Progress 用板块有效语言显示速览，通过 `worktree-lineage` 的 `briefing` RPC 读已保存内容；用户点“重新生成”时调用对方的 `regenerateBriefing`（立即按当前配置重写一次，按返回的 status 用板块语言提示结果）。设置页通过 `briefingConfig` / `setBriefingConfig` 编辑该插件持有的生成配置。对方缺席或接口不兼容时显示配置不可用，其他设置继续工作。
+Progress 通过 `worktree-lineage` 的 `briefing` RPC 读已保存的速览，概括、阶段标题与细则不论什么语言都原样显示（与对方的悬停卡片同一份，绝不换成占位字）；板块自己的文案用板块有效语言。设置页改 Progress 的语言时调用对方的 `setBriefingConfig({ language })` 同步速览生成语言；点“重新生成”时调用 `regenerateBriefing({ threadId, language })`，按板块有效语言立即重写，按返回的 status 用板块语言提示结果。设置页通过 `briefingConfig` / `setBriefingConfig` 编辑该插件持有的生成配置。对方缺席或接口不兼容时显示配置不可用，其他设置继续工作。
 桌面卡片依赖 bb 实验功能 `threadContextCard` 且卡片处于固定状态（`threadContextCard.pinned`）；手机与窄窗格走横幅，不依赖该实验。
 L3 豁免（零适配逻辑的脚手架基础组件）：components/ui/button.tsx、components/ui/card.tsx、components/ui/checkbox.tsx、components/ui/dialog.tsx、components/ui/input.tsx、components/ui/icon.tsx、components/ui/motion.ts、components/ui/coarse-pointer-sizing.ts、components/ui/overlay-trigger.ts、components/ui/responsive-overlay.tsx、components/ui/hooks/use-compact-viewport.tsx、components/ui/hooks/use-media-query.ts、components/ui/hooks/use-pointer-coarse.ts、hooks/useBrowserDimmingModal.ts、lib/utils.ts、lib/portal-scope.ts
 </compatibility>

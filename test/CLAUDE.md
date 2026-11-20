@@ -5,6 +5,7 @@
 - i18n.test.ts 验证双语纯度、自动语言优先级、映射与本地化格式。
 - cockpit-prefs.test.ts 验证板块排序、旧数据迁移、语言覆盖和显示参数边界。
 - briefing-config.test.ts 验证跨插件配置契约容错、输入边界和差量提交。
+- progress-view.test.ts 验证异语种与中英混写的速览原样显示（不退化成占位字）、空字段才用占位字，以及 Progress 改语言时同步速览生成语言的补丁。
 - briefing-regenerate.test.ts 验证重新生成结果的容错解析、按钮出现条件、结果到提示词条的映射与两种语言的文案纯度。
 - usage.test.ts 验证用量口径、缓存与官方分类。fixtures/ 提供脱敏的用量样本。
 - context-files.test.ts 验证文件发现、层级和已加载状态。

@@ -4,7 +4,7 @@
  * [POS]: 跨插件设置入口；生成配置由 Worktree Lineage 持久化并执行。
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
@@ -14,8 +14,12 @@ import { languageMode, type MessageKey } from "../../lib/i18n";
 import { useLanguage, useText } from "./language";
 import { usePrefs } from "./prefs";
 
-const pluginId = "worktree-lineage";
-const contract = defineRpcContract({
+export const BRIEFING_PLUGIN_ID = "worktree-lineage";
+/** 别处（Choose details 改 Progress 语言）写了速览配置后派发：本区重读，显示跟上 */
+export const BRIEFING_CONFIG_CHANGED_EVENT = "session-cockpit:briefing-config-changed";
+const pluginId = BRIEFING_PLUGIN_ID;
+/** worktree-lineage 的速览配置接口（设置页改 Progress 语言时也用它同步生成语言） */
+export const briefingConfigContract = defineRpcContract({
   briefingConfig: { input: z.object({}).strict(), output: briefingConfigSchema },
   setBriefingConfig: { input: briefingUpdateSchema, output: briefingConfigSchema },
 });
@@ -25,8 +29,15 @@ const BUTTON = "rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-s
 
 export function BriefingSettings() {
   const t = useText();
-  const query = experimental_useRpcQuery({ pluginId, contract, method: "briefingConfig", input: {} });
-  const mutation = experimental_useRpcMutation({ pluginId, contract, method: "setBriefingConfig" });
+  const query = experimental_useRpcQuery({ pluginId, contract: briefingConfigContract, method: "briefingConfig", input: {} });
+  const mutation = experimental_useRpcMutation({ pluginId, contract: briefingConfigContract, method: "setBriefingConfig" });
+  const refetchRef = useRef(query.refetch);
+  refetchRef.current = query.refetch;
+  useEffect(() => {
+    const reload = () => void refetchRef.current();
+    window.addEventListener(BRIEFING_CONFIG_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(BRIEFING_CONFIG_CHANGED_EVENT, reload);
+  }, []);
   return (
     <section className="space-y-3" data-cockpit-briefing>
       <h3 className="text-sm font-medium">{t("briefingSettings")}</h3>

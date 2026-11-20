@@ -13,7 +13,7 @@ _Demo labels and paths in the live BB interface._
 | Group | At a glance |
 | --- | --- |
 | **Environment** | Shows the project name. Expand it for the repository, the environment kind (Worktree, Project checkout, Personal workspace), the branch with a green dot when clean or an orange `M` and the changed-file count from bb's git plugin, the path with a one-click copy, and **New thread in this environment**. Non-git workspaces show only the kind and path. |
-| **Progress** | See the current stage and how many are done. Expand the row for the briefing and stage notes from the optional [Worktree Lineage](#related-bb-plugins) plugin. **Regenerate** at the bottom rewrites the summary now with the current settings. |
+| **Progress** | See the current stage and how many are done. Expand the row for the briefing and stage notes from the optional [Worktree Lineage](#related-bb-plugins) plugin. The summary, stage titles and notes are always shown as written, the same briefing as Worktree Lineage's hover card. **Regenerate** at the bottom rewrites it now in the Progress row's language, and changing the Progress row's language in settings also switches the briefing generation language. |
 | **Usage** | See how full the context window is, what’s using it, and when the prompt cache might expire. The **Session** row adds token totals, cache hits, working time, and cost when the provider reports it. |
 | **Workspace** | See which context files are loaded and which dev servers are running. Preview a file, open a server, run a project script, see loaded MCP connectors, or open a side chat. |
 

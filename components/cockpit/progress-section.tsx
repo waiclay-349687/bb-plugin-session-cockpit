@@ -1,16 +1,16 @@
 /**
  * [INPUT]: 依赖板块有效语言（含 useSectionNotice 轻提示）、lib/briefing-regenerate 的结果契约与提示映射和 @get-bb/plugin-sdk/app 的 experimental_useRpcQuery 跨插件读取 worktree-lineage 插件的 briefing RPC (存盘的"全程速览" + 是否落后 + 兜底摘要); 依赖 data.ts 的 useSession (本轮是否在跑、已完成几轮, 用来决定何时重读)
- * [OUTPUT]: 对外提供 ProgressSection: Progress 组里唯一的一项（展开后的底栏有“重新生成”按钮，调用 worktree-lineage 的 regenerateBriefing）。收起时一行 = 当前阶段 + 完成数 (如 "● 右上角 Session 插件  3/5"); 点开 = 一句话概括 + 完整的阶段轨道 (每个阶段带结论)
+ * [OUTPUT]: 对外提供 ProgressSection: Progress 组里唯一的一项（展开后的底栏有“重新生成”按钮，调用 worktree-lineage 的 regenerateBriefing 并带上板块有效语言）。速览的概括、阶段标题与细则不论什么语言都原样显示（与 worktree-lineage 的悬停卡片同一份），不换成占位字。收起时一行 = 当前阶段 + 完成数 (如 "● 右上角 Session 插件  3/5"); 点开 = 一句话概括 + 完整的阶段轨道 (每个阶段带结论)
  * [POS]: components/cockpit 的"这条对话到哪了"分区; 消费者: cockpit.tsx; 与 worktree-lineage 的边界: 速览由那个插件在每轮结束时让小模型写好并存盘, 本分区平时只读已保存内容; 只有用户点“重新生成”才请对方立即重写一次 (花一次额度, 受对方每天上限约束);
  *        那个插件没装、被停用或返回的形状对不上时, 本分区不显示
  * [PROTOCOL]: 变更时更新此头部,然后检查所在目录 CLAUDE.md
  */
-import { useSectionNotice, useTranslation, useText } from "./language";
-import { matchingProse } from "../../lib/i18n";
+import { useLanguage, useSectionNotice, useTranslation, useText } from "./language";
 import { useEffect, useRef, useState } from "react";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { canRegenerate, regenerateNotice, regenerateResultSchema } from "../../lib/briefing-regenerate";
+import { briefingDisplay, type BriefingDisplay } from "../../lib/progress-view";
 import { z } from "zod";
 import { Icon } from "@/components/ui/icon";
 import { useSession } from "./data";
@@ -44,7 +44,7 @@ const briefingContract = defineRpcContract({
   },
   /** 手动重新生成一条对话的速览：对方立即按当前配置重写，status 说明结果 */
   regenerateBriefing: {
-    input: z.object({ threadId: z.string() }),
+    input: z.object({ threadId: z.string(), language: z.enum(["en", "zh"]).optional() }),
     output: regenerateResultSchema,
   },
 });
@@ -81,13 +81,15 @@ function useBriefing(threadId: string) {
  */
 function RegenerateButton({ threadId, onDone }: { threadId: string; onDone: () => Promise<unknown> }) {
   const t = useText();
+  const language = useLanguage();
   const notify = useSectionNotice();
   const mutation = experimental_useRpcMutation({ pluginId: BRIEFING_PLUGIN_ID, contract: briefingContract, method: "regenerateBriefing" });
   const [busy, setBusy] = useState(false);
   const run = async () => {
     setBusy(true);
     try {
-      const result = await mutation.mutate({ threadId }).catch(() => null);
+      // 按 Progress 板块的有效语言写：板块设成中文，点一次就得到完整的中文速览（对方也会把速览语言设置同步过去）
+      const result = await mutation.mutate({ threadId, language }).catch(() => null);
       const notice = regenerateNotice(result);
       if (result?.ok) await onDone().catch(() => undefined);
       notify(notice.kind, notice.key);
@@ -133,9 +135,8 @@ function StageMark({ state }: { state: Stage["state"] }) {
   );
 }
 
-/** 点开后的完整轨道: 每个阶段一行名称 + 它的结论, 标记之间用细线连起来 */
-function Stages({ stages }: { stages: readonly Stage[] }) {
-  const { t, language } = useTranslation();
+/** 点开后的完整轨道: 每个阶段一行名称 + 它的结论, 标记之间用细线连起来; 文字是 briefingDisplay 给的原文 */
+function Stages({ stages }: { stages: BriefingDisplay["stages"] }) {
   return (
     <ol className="px-2 pt-2">
       {stages.map((stage, index) => (
@@ -145,8 +146,8 @@ function Stages({ stages }: { stages: readonly Stage[] }) {
             <StageMark state={stage.state} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className={stage.state === "dropped" ? "text-xs leading-4 text-muted-foreground" : "text-xs font-medium leading-4 text-foreground"}>{matchingProse(language, stage.title) ?? t("progressStage", { count: index + 1 })}</div>
-            {matchingProse(language, stage.note) ? <div className="text-[11px] leading-4 text-muted-foreground">{stage.note}</div> : null}
+            <div className={stage.state === "dropped" ? "text-xs leading-4 text-muted-foreground" : "text-xs font-medium leading-4 text-foreground"}>{stage.title}</div>
+            {stage.note ? <div className="text-[11px] leading-4 text-muted-foreground">{stage.note}</div> : null}
           </div>
         </li>
       ))}
@@ -154,13 +155,8 @@ function Stages({ stages }: { stages: readonly Stage[] }) {
   );
 }
 
-/** 收起时显示哪个阶段: 进行中的那个; 没有进行中的 (全做完了) 就显示最后一个没放弃的 */
-function headline(stages: readonly Stage[]): Stage | undefined {
-  return stages.find((stage) => stage.state === "doing") ?? [...stages].reverse().find((stage) => stage.state !== "dropped") ?? stages[stages.length - 1];
-}
-
 export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const { view, refetch } = useBriefing(threadId);
   // 插件没装 / 用户关了速览 / 还一轮都没聊: 没有可显示的东西 (整组连组名一起不出现)
   if (!view || !view.enabled || (view.briefing === null && view.recap.turns === 0)) return null;
@@ -176,27 +172,26 @@ export function ProgressSection({ threadId, open, onToggle }: SectionProps) {
     );
   }
   const behind = view.freshness?.state === "behind";
-  const current = headline(briefing.stages);
-  const done = briefing.stages.filter((stage) => stage.state === "done").length;
-  const total = briefing.stages.filter((stage) => stage.state !== "dropped").length;
+  // 速览原文不论什么语言都原样显示，只有字段为空才用占位字
+  const shown = briefingDisplay(briefing, { about: t("progressFallback"), stage: (count) => t("progressStage", { count }) });
   return (
     <div>
       <SectionRow
-        leading={current ? <StageMark state={current.state} /> : undefined}
-        label={current ? matchingProse(language, current.title) ?? t("progressStage", { count: briefing.stages.indexOf(current) + 1 }) : t("progressFallback")}
-        title={matchingProse(language, briefing.about)}
+        leading={shown.headline ? <StageMark state={shown.headline.state} /> : undefined}
+        label={shown.headline ? shown.headline.title : t("progressFallback")}
+        title={shown.about}
         priority="label"
         open={open}
         onToggle={onToggle}
         summary={
           <span>
-            {done}/{total}
+            {shown.done}/{shown.total}
           </span>
         }
       />
       <SectionBody open={open}>
-        <p className="px-2 pt-0.5 text-xs leading-4 text-foreground">{matchingProse(language, briefing.about) ?? t("progressFallback")}</p>
-        <Stages stages={briefing.stages} />
+        <p className="px-2 pt-0.5 text-xs leading-4 text-foreground">{shown.about}</p>
+        <Stages stages={shown.stages} />
         {/* 底栏：左边是“落后时会在这一轮结束后更新”的说明，右边是重新生成（与 Context 底栏的 Compact 同样式） */}
         <div className="flex items-center gap-2 px-2 pt-2">
           <span className="min-w-0 flex-1 truncate text-[11px] leading-4 text-muted-foreground">{behind ? t("updatesWhenDone") : ""}</span>

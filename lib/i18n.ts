@@ -57,6 +57,7 @@ export const messages = {
   cardHeight: ["Maximum desktop card height", "桌面卡片最大高度"],
   pixels: ["{value} px", "{value} 像素"],
   briefingSettings: ["Progress briefing", "进度速览配置"],
+  briefingSyncFailed: ["Couldn't sync the progress summary language", "未能同步进展总结的语言"],
   briefingUnavailable: ["Worktree Lineage does not provide briefing configuration. Install or update the plugin and try again.", "当前无法读取速览配置。请安装或更新 Worktree Lineage 后重试。"],
   briefingLoading: ["Loading briefing configuration…", "正在读取速览配置…"],
   retry: ["Try again", "重试"],
