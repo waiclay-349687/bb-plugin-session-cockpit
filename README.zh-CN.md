@@ -1,3 +1,12 @@
+> [!IMPORTANT]
+> **本仓库已迁移到 [waiclay-349687/bb-plugins](https://github.com/waiclay-349687/bb-plugins/tree/main/plugins/session-cockpit)，并已归档（只读）。** 新版本、问题与合并请求都在那里的 `plugins/session-cockpit` 目录。从单仓库安装：
+>
+> ```sh
+> bb plugin install git:https://github.com/waiclay-349687/bb-plugins.git --plugin session-cockpit --yes
+> ```
+>
+> 之前从本仓库的本地克隆安装？克隆 bb-plugins，在仓库根目录运行 `bb plugin install "path:$PWD" --plugin session-cockpit --yes`，bb 会把插件迁到新目录并保留设置。
+
 > [English](README.md) | **简体中文**
 
 # Session Cockpit 会话驾驶舱
